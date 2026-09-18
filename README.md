@@ -7,6 +7,8 @@ Análise da produção agrícola dos municípios do Rio Grande do Sul (soja, mil
 trigo, arroz e outras culturas) utilizando **Metabase** como ferramenta de
 Business Intelligence, com dados extraídos do **IBGE/SIDRA**.
 
+Público alvo: Setor privado, foco em cooperativas e bancos para análise de risco de safra. Análise de dados de todo o Brasil.
+
 ## 👥 Integrantes
 
 - Mateus
