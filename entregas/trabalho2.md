@@ -3,7 +3,7 @@
 **Disciplina:** Banco de Dados 2 (IBI-BDD002)  
 **Curso:** Ciência da Computação — Bacharelado  
 **Campus:** IFRS Ibirubá  
-**Grupo:** Mateus, Kerlon e Michel  
+**Grupo:** Metabase — Mateus, Kerlon e Michel  
 **Docente:** Edimar Manica  
 **Ferramenta:** Metabase (open source, licença AGPL v3)  
 **Base de dados:** Produção Agrícola Municipal (PAM) — IBGE/SIDRA  
@@ -33,13 +33,14 @@ de plantio, avaliação de risco de safra e planejamento de investimento.
 
 ## 2. Objetivo Geral do Dashboard
 
-Analisar a evolução da produção agrícola dos municípios do Rio Grande do Sul —
-com foco em soja, milho, trigo e arroz — observando área plantada,
-produtividade e valor da produção ao longo da série histórica disponível no
-IBGE/SIDRA (1990–2023). O dashboard busca evidenciar tendências, identificar
-municípios de destaque produtivo e quantificar o impacto de eventos climáticos
-(como a estiagem de 2022) na produtividade das lavouras, fornecendo subsídio
-concreto para tomada de decisão em políticas de assistência técnica rural.
+Analisar a evolução da produção agrícola dos municípios brasileiros, com
+destaque para o Rio Grande do Sul, observando área plantada, produtividade,
+quantidade produzida e valor da produção ao longo da série histórica
+disponível na base (2013–2023) do IBGE/SIDRA. O dashboard permite filtrar por
+cultura, ano e estado, busca evidenciar tendências, identificar municípios de
+destaque produtivo e quantificar o impacto de eventos climáticos (como a
+estiagem de 2022) na produtividade das lavouras, fornecendo subsídio concreto
+para tomada de decisão em políticas de assistência técnica rural.
 
 ---
 
@@ -53,109 +54,269 @@ interativos a partir dos dados armazenados no PostgreSQL.
 
 ## 4. Visualizações do Dashboard
 
-> **Nota:** Esta seção será preenchida após a finalização dos dashboards no
-> Metabase. Cada bloco abaixo corresponde a um gráfico; inserir o print e
-> completar os campos "O quê" e "Por quê" conforme o gráfico for criado.
+Além dos 10 gráficos abaixo, o dashboard traz 5 indicadores (KPIs): valor
+total da produção, rendimento médio, área plantada, quantidade produzida e
+contagem de municípios. Os filtros disponíveis são cultura, ano e estado.
+
+> **Nota:** o campo **Como** (print com dados reais) será preenchido conforme
+> cada gráfico for finalizado no Metabase. O campo **SQL (registro)** guarda a
+> consulta usada, para que outras pessoas possam reproduzir o gráfico em suas
+> próprias bases.
 
 ---
 
-### Gráfico 1 — [NOME DO GRÁFICO]
+### Gráfico 1 — Eficiência agrícola por estado
 
-**O quê:** [Descrever quais dados são exibidos, métricas, filtros e período]  
-**Como:**  
-[inserir print aqui]  
-**Por quê:** [Explicar a importância dessa visualização para o público-alvo e
-quais decisões ela subsidia]
+**O quê:** rendimento médio (kg/ha, calculado como quantidade produzida ÷ área
+plantada) de cada unidade da federação, para a cultura selecionada no filtro.  
+**Como:** mapa do Brasil, com os estados coloridos por faixa de rendimento.
 
----
+<!-- ![Gráfico 1](../imagens/grafico1.png) -->
+[inserir print aqui]
 
-### Gráfico 2 — [NOME DO GRÁFICO]
+**Por quê:** mostra rapidamente quais estados são mais e menos produtivos e
+onde o RS se posiciona, indicando onde a assistência técnica pode ter mais
+efeito.
 
-**O quê:** [Descrever quais dados são exibidos, métricas, filtros e período]  
-**Como:**  
-[inserir print aqui]  
-**Por quê:** [Explicar a importância dessa visualização para o público-alvo e
-quais decisões ela subsidia]
+**SQL (registro):**
 
----
-
-### Gráfico 3 — [NOME DO GRÁFICO]
-
-**O quê:** [Descrever quais dados são exibidos, métricas, filtros e período]  
-**Como:**  
-[inserir print aqui]  
-**Por quê:** [Explicar a importância dessa visualização para o público-alvo e
-quais decisões ela subsidia]
+```sql
+-- preencher após validar no banco
+```
 
 ---
 
-### Gráfico 4 — [NOME DO GRÁFICO]
+### Gráfico 2 — Peso financeiro das culturas
 
-**O quê:** [Descrever quais dados são exibidos, métricas, filtros e período]  
-**Como:**  
-[inserir print aqui]  
-**Por quê:** [Explicar a importância dessa visualização para o público-alvo e
-quais decisões ela subsidia]
+**O quê:** valor total da produção de cada cultura.  
+**Como:** gráfico de colunas verticais, uma coluna por cultura, ordenadas da
+maior para a menor.
 
----
+<!-- ![Gráfico 2](../imagens/grafico2.png) -->
+[inserir print aqui]
 
-### Gráfico 5 — [NOME DO GRÁFICO]
+**Por quê:** cria um ranking econômico das culturas e mostra onde está o maior
+retorno financeiro, ajudando a priorizar apoio e políticas.
 
-**O quê:** [Descrever quais dados são exibidos, métricas, filtros e período]  
-**Como:**  
-[inserir print aqui]  
-**Por quê:** [Explicar a importância dessa visualização para o público-alvo e
-quais decisões ela subsidia]
+**SQL (registro):**
 
----
-
-### Gráfico 6 — [NOME DO GRÁFICO]
-
-**O quê:** [Descrever quais dados são exibidos, métricas, filtros e período]  
-**Como:**  
-[inserir print aqui]  
-**Por quê:** [Explicar a importância dessa visualização para o público-alvo e
-quais decisões ela subsidia]
+```sql
+-- preencher após validar no banco
+```
 
 ---
 
-### Gráfico 7 — [NOME DO GRÁFICO]
+### Gráfico 3 — Evolução histórica da produção
 
-**O quê:** [Descrever quais dados são exibidos, métricas, filtros e período]  
-**Como:**  
-[inserir print aqui]  
-**Por quê:** [Explicar a importância dessa visualização para o público-alvo e
-quais decisões ela subsidia]
+**O quê:** quantidade produzida (ou valor da produção) por ano, de 2013 a 2023,
+para a cultura e o estado selecionados.  
+**Como:** gráfico de linhas (série temporal), com os anos no eixo X.
 
----
+<!-- ![Gráfico 3](../imagens/grafico3.png) -->
+[inserir print aqui]
 
-### Gráfico 8 — [NOME DO GRÁFICO]
+**Por quê:** evidencia tendências de crescimento, estagnação e quebras de safra
+por seca ou geada (como a estiagem de 2022 no RS), apoiando planejamento e
+resposta a eventos climáticos.
 
-**O quê:** [Descrever quais dados são exibidos, métricas, filtros e período]  
-**Como:**  
-[inserir print aqui]  
-**Por quê:** [Explicar a importância dessa visualização para o público-alvo e
-quais decisões ela subsidia]
+**SQL (registro):**
 
----
-
-### Gráfico 9 — [NOME DO GRÁFICO]
-
-**O quê:** [Descrever quais dados são exibidos, métricas, filtros e período]  
-**Como:**  
-[inserir print aqui]  
-**Por quê:** [Explicar a importância dessa visualização para o público-alvo e
-quais decisões ela subsidia]
+```sql
+-- preencher após validar no banco
+```
 
 ---
 
-### Gráfico 10 — [NOME DO GRÁFICO]
+### Gráfico 4 — Participação das culturas no uso do solo
 
-**O quê:** [Descrever quais dados são exibidos, métricas, filtros e período]  
-**Como:**  
-[inserir print aqui]  
-**Por quê:** [Explicar a importância dessa visualização para o público-alvo e
-quais decisões ela subsidia]
+**O quê:** percentual da área plantada de cada cultura em relação ao total, no
+ano selecionado.  
+**Como:** gráfico de rosca (donut).
+
+<!-- ![Gráfico 4](../imagens/grafico4.png) -->
+[inserir print aqui]
+
+**Por quê:** mostra quais culturas ocupam mais espaço no território e o quanto
+a produção depende de poucas culturas. O gestor pode avaliar essa dependência e
+decidir entre incentivar a diversificação ou reforçar o apoio às culturas
+dominantes.
+
+**SQL (registro):**
+
+```sql
+-- preencher após validar no banco
+```
+
+---
+
+### Gráfico 5 — Relação entre área plantada e eficiência
+
+**O quê:** área plantada (eixo X) cruzada com o rendimento médio em kg/ha (eixo
+Y) para cada estado produtor.  
+**Como:** gráfico de dispersão (scatter), com um ponto por estado.
+
+<!-- ![Gráfico 5](../imagens/grafico5.png) -->
+[inserir print aqui]
+
+**Por quê:** mostra que o maior estado não é necessariamente o mais produtivo,
+identificando estados que produzem muito em pouca área e estados com grandes
+áreas e baixa eficiência. A assistência técnica pode priorizar estados com
+muita área e baixa eficiência e usar os mais eficientes como referência de boas
+práticas.
+
+**SQL (registro):**
+
+```sql
+-- preencher após validar no banco
+```
+
+---
+
+### Gráfico 6 — Evolução comparativa de culturas
+
+**O quê:** valor da produção das principais culturas ao longo dos anos.  
+**Como:** gráfico de área empilhada.
+
+<!-- ![Gráfico 6](../imagens/grafico6.png) -->
+[inserir print aqui]
+
+**Por quê:** mostra o crescimento histórico do setor e como a proporção de cada
+cultura muda com o tempo, por exemplo se a soja está ocupando o espaço que era
+de outro produto. O gestor pode antecipar mudanças no perfil produtivo, como o
+avanço da soja, e adaptar capacitação e crédito às culturas que crescem.
+
+**SQL (registro):**
+
+```sql
+-- preencher após validar no banco
+```
+
+---
+
+### Gráfico 7 — Matriz de crescimento regional
+
+**O quê:** valor total da produção, com os estados nas linhas e os anos nas
+colunas.  
+**Como:** tabela dinâmica (pivot table).
+
+<!-- ![Gráfico 7](../imagens/grafico7.png) -->
+[inserir print aqui]
+
+**Por quê:** permite ler os dados em formato de matriz e identificar
+rapidamente quais estados estão estagnados e quais estão em expansão ano após
+ano. O gestor pode identificar estados e anos de queda e direcionar apoio às
+regiões estagnadas, usando os números exatos em relatórios.
+
+**SQL (registro):**
+
+```sql
+-- preencher após validar no banco
+```
+
+---
+
+### Gráfico 8 — Ranking de municípios polos
+
+**O quê:** os 10 municípios com maior quantidade produzida (toneladas) da
+cultura selecionada, para o ano e o estado escolhidos nos filtros (padrão:
+soja, 2023, todos os estados).  
+**Como:** gráfico de barras horizontais, com uma cor para cada município.
+
+<!-- ![Gráfico 8](../imagens/grafico8.png) -->
+![Gráfico 8 — Ranking de municípios polos](../imagens/grafico8.png)
+
+**Por quê:** desce da visão por estado para os municípios que realmente movem a
+produção, e permite ao gestor municipal comparar seu município com os líderes.
+
+**SQL (registro):**
+
+Versão usada no Metabase (com as variáveis de filtro `cultura`, `ano` e
+`estado`; `cultura` e `estado` são Field Filters, `ano` é do tipo Number):
+
+```sql
+SELECT
+  m.nome || ' - ' || e.nome AS municipio,
+  m.nome || ' - ' || e.nome AS legenda,
+  SUM(pa.valor) AS toneladas
+FROM producao_agricola pa
+JOIN municipio m ON pa.municipio_id = m.id
+JOIN estado    e ON m.estado_id     = e.id
+JOIN produto   p ON pa.produto_id   = p.id
+JOIN variavel  v ON pa.variavel_id  = v.id
+WHERE v.nome = 'Quantidade produzida (Toneladas)'
+  AND {{cultura}}
+  AND pa.ano = {{ano}}
+  [[AND {{estado}}]]
+GROUP BY m.id, m.nome, e.nome
+ORDER BY toneladas DESC
+LIMIT 10;
+```
+
+Versão para rodar direto no PostgreSQL (sem variáveis do Metabase; troque a
+cultura, o ano e, se quiser, descomente o filtro de estado):
+
+```sql
+SELECT
+  m.nome || ' - ' || e.nome AS municipio,
+  SUM(pa.valor) AS toneladas
+FROM producao_agricola pa
+JOIN municipio m ON pa.municipio_id = m.id
+JOIN estado    e ON m.estado_id     = e.id
+JOIN produto   p ON pa.produto_id   = p.id
+JOIN variavel  v ON pa.variavel_id  = v.id
+WHERE v.nome = 'Quantidade produzida (Toneladas)'
+  AND p.nome ILIKE 'Soja%'
+  AND pa.ano = 2023
+  -- AND e.nome = 'Rio Grande do Sul'
+GROUP BY m.id, m.nome, e.nome
+ORDER BY toneladas DESC
+LIMIT 10;
+```
+
+---
+
+### Gráfico 9 — Relação histórica entre volume produzido e área plantada
+
+**O quê:** quantidade produzida (toneladas) e área plantada ao longo dos anos,
+para o produto filtrado.  
+**Como:** gráfico combinado, com barras para a quantidade produzida e linha
+para a área plantada.
+
+<!-- ![Gráfico 9](../imagens/grafico9.png) -->
+[inserir print aqui]
+
+**Por quê:** mostra como a produção cresceu. Se as barras sobem e a linha de
+área fica estável, houve ganho de produtividade. Se ambas sobem juntas, o
+crescimento veio da expansão da área plantada. O gestor pode usar essa leitura
+para decidir se o apoio deve focar em ganho de produtividade ou em ampliação de
+área.
+
+**SQL (registro):**
+
+```sql
+-- preencher após validar no banco
+```
+
+---
+
+### Gráfico 10 — Concentração de riqueza agrícola
+
+**O quê:** participação de cada estado no valor total da produção nacional.  
+**Como:** mapa de árvore (treemap), com retângulos proporcionais ao valor.
+
+<!-- ![Gráfico 10](../imagens/grafico10.png) -->
+[inserir print aqui]
+
+**Por quê:** é mais legível que uma pizza quando há 27 estados e mostra
+rapidamente a dominância econômica de alguns estados e o peso relativo do RS.
+Permite dimensionar o peso econômico de cada estado e do RS no país, apoiando
+pedidos de recursos e políticas para o setor.
+
+**SQL (registro):**
+
+```sql
+-- preencher após validar no banco
+```
 
 ---
 
