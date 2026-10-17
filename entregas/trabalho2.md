@@ -222,7 +222,6 @@ cultura selecionada, para o ano e o estado escolhidos nos filtros (padrão:
 soja, 2023, todos os estados).  
 **Como:** gráfico de barras horizontais, com uma cor para cada município.
 
-<!-- ![Gráfico 8](../imagens/grafico8.png) -->
 ![Gráfico 8 — Ranking de municípios polos](../imagens/grafico8.png)
 
 **Por quê:** desce da visão por estado para os municípios que realmente movem a
@@ -231,7 +230,8 @@ produção, e permite ao gestor municipal comparar seu município com os lídere
 **SQL (registro):**
 
 Versão usada no Metabase (com as variáveis de filtro `cultura`, `ano` e
-`estado`; `cultura` e `estado` são Field Filters, `ano` é do tipo Number):
+`estado`, as três do tipo Field Filter, que geram listas de seleção no
+dashboard):
 
 ```sql
 SELECT
@@ -245,7 +245,7 @@ JOIN produto   p ON pa.produto_id   = p.id
 JOIN variavel  v ON pa.variavel_id  = v.id
 WHERE v.nome = 'Quantidade produzida (Toneladas)'
   AND {{cultura}}
-  AND pa.ano = {{ano}}
+  AND {{ano}}
   [[AND {{estado}}]]
 GROUP BY m.id, m.nome, e.nome
 ORDER BY toneladas DESC
@@ -365,11 +365,12 @@ pedidos de recursos e políticas para o setor.
    SSO e suporte oficial estão disponíveis apenas nas edições Pro/Enterprise,
    criando limitações relevantes para uso em ambientes institucionais.
 
-4. **Performance degradada em consultas com múltiplos joins sobre tabelas
-   grandes** — a base utilizada contém aproximadamente 2,9 milhões de linhas;
-   dashboards com cadeias de joins encadeados (município → estado → região)
-   apresentaram lentidão perceptível, exigindo criação de índices adicionais e
-   ajuste de configurações do PostgreSQL fora do Metabase.
+4. **Desempenho em consultas com vários joins sobre tabelas grandes** — a base
+   utilizada contém aproximadamente 2,9 milhões de linhas; consultas que
+   encadeiam vários joins (produção → município → estado) e agregam a série
+   histórica inteira levaram cerca de 3 segundos para responder. O tempo é
+   aceitável nesta base, mas tende a aumentar em bases maiores e pode exigir
+   índices e ajustes no banco, fora do Metabase.
 
 5. **Curva de aprendizado para modelagem relacional** — embora a interface
    visual abstrai o SQL, o usuário ainda precisa compreender o conceito de
