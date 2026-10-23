@@ -88,20 +88,61 @@ efeito.
 
 ### Gráfico 2 — Peso financeiro das culturas
 
-**O quê:** valor total da produção de cada cultura.  
-**Como:** gráfico de colunas verticais, uma coluna por cultura, ordenadas da
-maior para a menor.
+**O quê:** valor total da produção (em bilhões de reais) de cada cultura, para
+o ano e o estado escolhidos nos filtros (padrão: 2023, todos os estados).  
+**Como:** gráfico de barras horizontais, uma barra por cultura, cada uma com uma
+cor, ordenadas da maior para a menor.
 
-<!-- ![Gráfico 2](../imagens/grafico2.png) -->
-[inserir print aqui]
+![Gráfico 2 — Peso financeiro das culturas](../imagens/grafico2.png)
 
 **Por quê:** cria um ranking econômico das culturas e mostra onde está o maior
 retorno financeiro, ajudando a priorizar apoio e políticas.
 
 **SQL (registro):**
 
+Versão usada no Metabase (com as variáveis de filtro `ano` e `estado`, ambas do
+tipo Field Filter). A variável `variavel` "Valor da produção" existe em três
+moedas na base (Mil Cruzeiros, Mil Cruzeiros Reais e Mil Reais), por isso a
+consulta filtra a unidade `Mil Reais`:
+
 ```sql
--- preencher após validar no banco
+SELECT
+  p.nome AS cultura,
+  p.nome AS legenda,
+  ROUND(SUM(pa.valor) / 1000000.0, 2) AS bilhoes_de_reais
+FROM producao_agricola pa
+JOIN produto   p ON pa.produto_id   = p.id
+JOIN variavel  v ON pa.variavel_id  = v.id
+JOIN unidade   u ON pa.unidade_id   = u.id
+JOIN municipio m ON pa.municipio_id = m.id
+JOIN estado    e ON m.estado_id     = e.id
+WHERE v.nome = 'Valor da produção (Mil Reais)'
+  AND u.nome = 'Mil Reais'
+  AND {{ano}}
+  [[AND {{estado}}]]
+GROUP BY p.id, p.nome
+ORDER BY bilhoes_de_reais DESC;
+```
+
+Versão para rodar direto no PostgreSQL (sem variáveis do Metabase; troque o ano
+e, se quiser, descomente o filtro de estado):
+
+```sql
+SELECT
+  p.nome AS cultura,
+  ROUND(SUM(pa.valor) / 1000000.0, 2) AS bilhoes_de_reais
+FROM producao_agricola pa
+JOIN produto   p ON pa.produto_id   = p.id
+JOIN variavel  v ON pa.variavel_id  = v.id
+JOIN unidade   u ON pa.unidade_id   = u.id
+JOIN municipio m ON pa.municipio_id = m.id
+JOIN estado    e ON m.estado_id     = e.id
+WHERE v.nome = 'Valor da produção (Mil Reais)'
+  AND u.nome = 'Mil Reais'
+  AND pa.ano = 2023
+  -- AND e.nome = 'Rio Grande do Sul'
+GROUP BY p.id, p.nome
+ORDER BY bilhoes_de_reais DESC;
 ```
 
 ---
