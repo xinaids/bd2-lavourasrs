@@ -170,12 +170,14 @@ resposta a eventos climáticos.
 
 ### Gráfico 4 — Participação das culturas no uso do solo
 
-**O quê:** percentual da área plantada de cada cultura em relação ao total, no
-ano selecionado.  
-**Como:** gráfico de rosca (donut).
+**O quê:** percentual da área plantada (em hectares) de cada cultura em relação
+ao total, para o ano e o estado escolhidos nos filtros (padrão: 2023, todos os
+estados). Para o café, que é cultura permanente, usa-se a área destinada à
+colheita, pois a base não traz área plantada para ele.  
+**Como:** gráfico de rosca (donut), com o total de hectares no centro e o
+percentual de cada cultura na legenda.
 
-<!-- ![Gráfico 4](../imagens/grafico4.png) -->
-[inserir print aqui]
+![Gráfico 4 — Participação das culturas no uso do solo](../imagens/grafico4.png)
 
 **Por quê:** mostra quais culturas ocupam mais espaço no território e o quanto
 a produção depende de poucas culturas. O gestor pode avaliar essa dependência e
@@ -184,8 +186,46 @@ dominantes.
 
 **SQL (registro):**
 
+Versão usada no Metabase (com as variáveis de filtro `ano` e `estado`, ambas do
+tipo Field Filter). A consulta usa a variável "Área plantada" para todas as
+culturas e "Área destinada à colheita" apenas para o café, evitando contar a
+mesma área duas vezes:
+
 ```sql
--- preencher após validar no banco
+SELECT
+  p.nome AS cultura,
+  SUM(pa.valor) AS hectares
+FROM producao_agricola pa
+JOIN produto   p ON pa.produto_id   = p.id
+JOIN variavel  v ON pa.variavel_id  = v.id
+JOIN municipio m ON pa.municipio_id = m.id
+JOIN estado    e ON m.estado_id     = e.id
+WHERE (   v.nome = 'Área plantada (Hectares)'
+       OR (v.nome = 'Área destinada à colheita (Hectares)' AND p.nome ILIKE 'Café%'))
+  AND {{ano}}
+  [[AND {{estado}}]]
+GROUP BY p.id, p.nome
+ORDER BY hectares DESC;
+```
+
+Versão para rodar direto no PostgreSQL (sem variáveis do Metabase; troque o ano
+e, se quiser, descomente o filtro de estado):
+
+```sql
+SELECT
+  p.nome AS cultura,
+  SUM(pa.valor) AS hectares
+FROM producao_agricola pa
+JOIN produto   p ON pa.produto_id   = p.id
+JOIN variavel  v ON pa.variavel_id  = v.id
+JOIN municipio m ON pa.municipio_id = m.id
+JOIN estado    e ON m.estado_id     = e.id
+WHERE (   v.nome = 'Área plantada (Hectares)'
+       OR (v.nome = 'Área destinada à colheita (Hectares)' AND p.nome ILIKE 'Café%'))
+  AND pa.ano = 2023
+  -- AND e.nome = 'Rio Grande do Sul'
+GROUP BY p.id, p.nome
+ORDER BY hectares DESC;
 ```
 
 ---
