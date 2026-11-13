@@ -13,21 +13,25 @@
 
 ## 1. Público-Alvo
 
-O dashboard é direcionado principalmente a **gestores públicos municipais e
-órgãos de assistência técnica rural** (Secretaria da Agricultura,
-Emater/RS-Ascar), que podem utilizar essas informações para:
+O dashboard é direcionado a **um único público: o(a) secretário(a) municipal de
+Agricultura de um município do Rio Grande do Sul** (e a sua equipe), que decide
+onde aplicar o orçamento e os programas de apoio ao produtor rural do
+município. Ele(a) pode usar essas informações para:
 
-- Direcionar políticas públicas e programas de assistência técnica para regiões
-  com queda de produtividade
-- Planejar ações de resposta a eventos climáticos adversos (seca, geadas)
+- Comparar o seu município com os líderes de produção e de rendimento, e
+  verificar o peso econômico de cada cultura no estado
+- Direcionar programas de assistência técnica (por exemplo, em parceria com a
+  Emater/RS-Ascar) para as culturas e regiões com queda de produtividade
+- Planejar ações de resposta a eventos climáticos adversos (estiagem, geada) e
+  fundamentar pedidos de apoio ao governo estadual e federal
 - Subsidiar decisões sobre investimento em infraestrutura rural (armazenagem,
-  irrigação, logística) com base nos municípios de maior relevância produtiva
-- Acompanhar a evolução da produção agrícola do estado ano a ano, com dados
-  oficiais e comparáveis
+  irrigação, estradas) com base nos municípios e culturas de maior relevância
+- Acompanhar a evolução da produção agrícola ano a ano, com dados oficiais e
+  comparáveis
 
-Secundariamente, as informações também são úteis para **cooperativas agrícolas,
-instituições financeiras de crédito rural e o próprio produtor**, para decisões
-de plantio, avaliação de risco de safra e planejamento de investimento.
+O painel não é um relatório técnico para pesquisadores nem uma análise de
+mercado para investidores: as perguntas e a linguagem foram pensadas para quem
+decide as ações de agricultura do município.
 
 ---
 
@@ -36,11 +40,11 @@ de plantio, avaliação de risco de safra e planejamento de investimento.
 Analisar a evolução da produção agrícola dos municípios brasileiros, com
 destaque para o Rio Grande do Sul, observando área plantada, produtividade,
 quantidade produzida e valor da produção ao longo da série histórica
-disponível na base (2013–2023) do IBGE/SIDRA. O dashboard permite filtrar por
-cultura, ano e estado, busca evidenciar tendências, identificar municípios de
-destaque produtivo e quantificar o impacto de eventos climáticos (como a
-estiagem de 2022) na produtividade das lavouras, fornecendo subsídio concreto
-para tomada de decisão em políticas de assistência técnica rural.
+disponível na base do IBGE/SIDRA. O dashboard permite filtrar por cultura, ano e
+estado, busca evidenciar tendências, identificar municípios de destaque
+produtivo e quantificar o impacto de eventos climáticos (como a estiagem de
+2022) na produtividade das lavouras, fornecendo subsídio concreto para a tomada
+de decisão do gestor municipal de agricultura.
 
 ---
 
@@ -49,6 +53,42 @@ para tomada de decisão em políticas de assistência técnica rural.
 **Metabase** — plataforma open source de Business Intelligence licenciada sob
 AGPL v3, utilizada para consulta, visualização e publicação de dashboards
 interativos a partir dos dados armazenados no PostgreSQL.
+
+**Objetivo da ferramenta:** permitir que qualquer pessoa de uma organização,
+mesmo sem conhecimento técnico de banco de dados, faça perguntas aos dados,
+crie visualizações e compartilhe dashboards, sem depender de um analista de BI
+para cada consulta.
+
+**Características da ferramenta:**
+
+1. **Código aberto (AGPL v3)** — a Community Edition é gratuita; as edições Pro
+   e Enterprise acrescentam recursos pagos.
+2. **Instalação própria ou em nuvem** — pode ser executado em infraestrutura
+   própria (Docker ou arquivo JAR) ou contratado como serviço (Metabase Cloud).
+3. **Conexão com vários bancos de dados** — PostgreSQL, MySQL, SQL Server,
+   BigQuery, MongoDB, entre outros; as consultas rodam no banco de origem, sem
+   copiar os dados para o Metabase.
+4. **Editor visual de perguntas (query builder)** — filtros, agrupamentos,
+   ordenação e junções montados pela interface, sem escrever SQL.
+5. **Editor de SQL nativo** — para consultas mais complexas, com variáveis e
+   filtros de campo (*Field Filters*) que viram filtros do dashboard.
+6. **Dashboards interativos** — vários gráficos na mesma tela, com filtros que
+   atuam sobre todos os gráficos conectados.
+7. **Variedade de visualizações** — tabela, barras, linhas, área, dispersão,
+   pizza/rosca, mapa, funil, tabela dinâmica (pivot), gráfico combinado, entre
+   outras.
+8. **Modelo de dados com metadados** — permite descrever tabelas e colunas,
+   definir tipos semânticos (categoria, moeda, coordenadas) e relacionamentos
+   entre tabelas.
+9. **Exploração automática (X-ray)** — gera automaticamente uma análise
+   exploratória de uma tabela ou de uma pergunta.
+10. **Alertas e assinaturas** — envio de gráficos e dashboards por e-mail ou
+    Slack, em horários programados ou quando uma condição é atingida.
+11. **Organização e permissões** — perguntas e dashboards agrupados em
+    coleções, com permissões por grupos de usuários.
+12. **Compartilhamento e exportação** — links públicos, incorporação em outras
+    páginas, exportação dos resultados em CSV, XLSX e JSON, e API REST para
+    automação.
 
 ---
 
@@ -62,6 +102,25 @@ contagem de municípios. Os filtros disponíveis são cultura, ano e estado.
 > cada gráfico for finalizado no Metabase. O campo **SQL (registro)** guarda a
 > consulta usada, para que outras pessoas possam reproduzir o gráfico em suas
 > próprias bases.
+
+**Resumo dos gráficos e dos tipos de visualização:**
+
+| Nº | Gráfico | Tipo de visualização |
+|----|---------|----------------------|
+| 1  | Eficiência agrícola por estado | Mapa |
+| 2  | Peso financeiro das culturas | Barras horizontais |
+| 3  | Evolução histórica da produção | Linhas |
+| 4  | Participação das culturas no uso do solo | Rosca (donut) |
+| 5  | Relação entre área plantada e eficiência | Dispersão (scatter) |
+| 6  | Evolução comparativa de culturas | Área empilhada |
+| 7  | Matriz de crescimento regional | Tabela dinâmica (pivot) |
+| 8  | Ranking de municípios polos | Barras horizontais |
+| 9  | Volume produzido × área plantada | Combinado (barras + linha) |
+| 10 | Concentração de riqueza agrícola | Mapa de árvore (treemap) |
+
+São **10 gráficos** e **9 tipos diferentes** de visualização (mapa, barras
+horizontais, linhas, rosca, dispersão, área empilhada, tabela dinâmica,
+combinado e treemap).
 
 ---
 
@@ -427,6 +486,16 @@ pedidos de recursos e políticas para o setor.
    enviar dados a servidores de terceiros, atendendo requisitos de privacidade
    e LGPD em projetos com dados sensíveis.
 
+6. **Filtros de dashboard a partir de variáveis no SQL nativo** — ao marcar uma
+   variável como *Field Filter*, o Metabase gera automaticamente listas de
+   seleção (cultura, ano, estado) no dashboard, mesmo em consultas escritas à
+   mão, como nos gráficos 2, 4 e 8.
+
+7. **Gráfico combinado com eixo duplo** — séries com escalas muito diferentes
+   (rendimento em kg/ha e chuva em mm) podem ser sobrepostas no mesmo gráfico,
+   cada uma com seu eixo e seu tipo (barra ou linha), como no gráfico 9
+   (toneladas × hectares).
+
 ---
 
 ## 6. Fragilidades da Ferramenta
@@ -437,7 +506,7 @@ pedidos de recursos e políticas para o setor.
    administrador, causando confusão e interrompendo o fluxo de trabalho.
 
 2. **Mensagens de erro pouco informativas** — erros de tipagem em joins (ex.:
-   *"operador não existe: integer = character varying"*) são exibidos sem
+   *"operador não existe: character varying = integer"*) são exibidos sem
    indicar qual relacionamento está incorreto, dificultando o diagnóstico sem
    recorrer aos logs do banco diretamente.
 
@@ -459,3 +528,18 @@ pedidos de recursos e políticas para o setor.
    dados corretamente. Erros na definição dos relacionamentos no Metabase
    resultam em resultados silenciosamente incorretos nos gráficos, sem aviso
    explícito.
+
+6. **Configuração frágil das variáveis (Field Filters)** — se o campo vinculado
+   ou o alias (como `pa.ano` ou `e.nome`) não for preenchido exatamente como na
+   consulta, a execução falha com erros como *"missing required parameters"* ou
+   *"referência inválida para tabela"*, e o problema só aparece ao rodar.
+
+7. **Anos tratados como números** — colunas inteiras, como o ano, são exibidas
+   com separador de milhar (2.012) e tratadas como escala numérica, o que exige
+   converter para texto na consulta (`ano::text`) ou ajustar a formatação
+   coluna a coluna.
+
+8. **Eixo duplo não é automático** — ao combinar séries de escalas diferentes,
+   o Metabase coloca tudo no mesmo eixo, e a série de menor valor vira uma
+   linha achatada até que cada série seja configurada
+   manualmente (tipo de gráfico e posição do eixo).
