@@ -151,8 +151,8 @@ def gera_sql(csv_path, sql_path):
     with open(sql_path, "w", encoding="utf-8", newline="\n") as s:
         s.write("-- Estimativa Embrapa Agritec (soja, plantio 15/11) por municipio e safra.\n")
         s.write("-- fator_clima = produtividade almejada final / expectativa (3 t/ha); 1 = sem perda.\n")
-        s.write("DROP TABLE IF EXISTS clima_agritec CASCADE;\n")
-        s.write("CREATE TABLE clima_agritec (\n"
+        s.write("-- Seguro para rodar varias vezes: NAO apaga a tabela; so acrescenta linhas novas.\n")
+        s.write("CREATE TABLE IF NOT EXISTS clima_agritec (\n"
                 "  municipio_id int, safra int, data_plantio date, dias int,\n"
                 "  prod_almejada numeric, prod_media_municipio numeric, fator_clima numeric,\n"
                 "  isna_medio numeric, dias_isna_baixo int, deficiencia_total numeric,\n"
@@ -168,7 +168,7 @@ def gera_sql(csv_path, sql_path):
                     l["prod_almejada"], l["prod_media_municipio"], l["fator_clima"],
                     l["isna_medio"], l["dias_isna_baixo"], l["deficiencia_total"],
                     l["chuva_total_mm"], l["dias_tmax_35"]))
-            s.write(",\n".join(vals) + ";\n")
+            s.write(",\n".join(vals) + "\nON CONFLICT (municipio_id, safra) DO NOTHING;\n")
         s.write("\n-- conferencia: fator medio por safra\n"
                 "SELECT safra, COUNT(*) AS municipios, ROUND(AVG(fator_clima),3) AS fator_medio,\n"
                 "       ROUND(AVG(isna_medio),3) AS isna_medio\n"
