@@ -305,7 +305,7 @@ temporárias e área destinada à colheita de culturas permanentes).
 **Como:** gráfico de rosca (donut) com o total acumulado no centro e o
 percentual de cada lavoura na legenda.
 
-![Gráfico 1 — Participação das culturas no uso do solo](imagens/grafico1.png)
+![Gráfico 1 — Participação das culturas no uso do solo](imagens/image1.png)
 
 **Por quê:** evidencia o grau de concentração territorial do agronegócio (como
 o domínio de Soja com 40,71%, Milho com 25,71% e Cana-de-açúcar com 12,65%) e
@@ -339,7 +339,7 @@ ORDER BY area_plantada_ha DESC;
 **Como:** gráfico de colunas coloridas por cultura com rótulos de valores no
 topo.
 
-![Gráfico 2 — Comparativo de valor de produção](imagens/grafico2.png)
+![Gráfico 2 — Comparativo de valor de produção](imagens/image2.png)
 
 **Por quê:** contrapõe o peso econômico ao peso físico das lavouras, mostrando
 quais cadeias geram maior retorno financeiro para o estado ou município.
@@ -375,7 +375,7 @@ esquerdo) e a área plantada em hectares (eixo Y direito) de 1990 a 2025.
 **Como:** gráfico combinado com barras azuis para toneladas e linha verde com
 marcadores para hectares.
 
-![Gráfico 3 — Relação histórica Volume produzido × Área plantada](imagens/grafico3.png)
+![Gráfico 3 — Relação histórica Volume produzido × Área plantada](imagens/image3.png)
 
 **Por quê:** permite distinguir se o crescimento da produção decorreu de
 expansão territorial ou de ganhos tecnológicos de produtividade por hectare.
@@ -406,7 +406,7 @@ ORDER BY producao_agricola.ano ASC;
 2025.  
 **Como:** gráfico de linhas com marcadores anuais.
 
-![Gráfico 4 — Evolução de Produção](imagens/grafico4.png)
+![Gráfico 4 — Evolução de Produção](imagens/image4.png)
 
 **Por quê:** destaca a trajetória estrutural da safra e evidencia visualmente
 quedas abruptas causadas por choques climáticos (como as quebras de 2005, 2012
@@ -437,7 +437,7 @@ ORDER BY producao_agricola.ano ASC;
 cultura de 1990 a 2025.  
 **Como:** gráfico de linhas múltiplas coloridas por cultura.
 
-![Gráfico 5 — Evolução comparativa de culturas](imagens/grafico5.png)
+![Gráfico 5 — Evolução comparativa de culturas](imagens/image5.png)
 
 **Por quê:** demonstra a transformação econômica do campo ao longo de três
 décadas, evidenciando o salto financeiro da soja e do milho a partir de 2020.
@@ -471,7 +471,7 @@ macrorregião ou fronteira agrícola (`MATOPIBA`, `SEALBA`, `AMACRO`).
 intensidade de produção) lida diretamente da view materializada
 `mv_historico_expansao_perda`.
 
-![Gráfico 6 — Matriz de crescimento regional](imagens/grafico6.png)
+![Gráfico 6 — Matriz de crescimento regional](imagens/image6.png)
 
 **Por quê:** permite comparar o avanço das novas fronteiras agrícolas
 (Centro-Oeste e MATOPIBA) frente às regiões produtoras tradicionais (Sul e
@@ -520,7 +520,7 @@ calculado pela razão entre produção total em quilogramas e área colhida em
 hectares.  
 **Como:** mapa coroplético do Brasil dividido por estados.
 
-![Gráfico 7 — Mapa de Eficiência de Cultura](imagens/grafico7.png)
+![Gráfico 7 — Mapa de Eficiência de Cultura](imagens/image7.png)
 
 **Por quê:** permite comparar instantaneamente a eficiência agronômica do Rio
 Grande do Sul frente aos demais estados produtores.
@@ -554,7 +554,7 @@ com os filtros de cultura, estado, ano e município selecionados.
 **Como:** gráfico de colunas com cores distintas por município e rótulos de
 volume no topo.
 
-![Gráfico 8 — Ranking de Municípios Polos — Top 10](imagens/grafico8.png)
+![Gráfico 8 — Ranking de Municípios Polos — Top 10](imagens/image8.png)
 
 **Por quê:** desce da escala estadual para a municipal, identificando os polos
 produtores que lideram a safra e servem de parâmetro comparativo para a gestão
@@ -590,7 +590,7 @@ LIMIT 10;
 médio em `kg/ha` (eixo Y) para cada estado produtor.  
 **Como:** gráfico de dispersão (scatter plot) com uma bolha por estado.
 
-![Gráfico 9 — Dispersão de Área vs. Eficiência](imagens/grafico9.png)
+![Gráfico 9 — Dispersão de Área vs. Eficiência](imagens/image9.png)
 
 **Por quê:** diferencia estados extensivos de estados intensivos em
 tecnologia, mostrando onde há oportunidade de elevar a produtividade sem
@@ -628,7 +628,7 @@ produção nacional (`R$`).
 cada UF (liderado por MT com 19,69%, SP com 13,32%, PR com 12,44%, MG com
 11,27% e RS com 9,92%).
 
-![Gráfico 10 — Concentração de Riqueza Agrícola](imagens/grafico10.png)
+![Gráfico 10 — Concentração de Riqueza Agrícola](imagens/image10.png)
 
 **Por quê:** ilustra a concentração econômica do agronegócio brasileiro e
 dimensiona o peso financeiro do Rio Grande do Sul na balança agrícola
@@ -663,7 +663,7 @@ ORDER BY valor_total_producao DESC;
 pelos estados brasileiros, filtrável por ano e estado.  
 **Como:** mapa coroplético do Brasil colorido por faixa pluviométrica (`mm`).
 
-![Gráfico 11 — Mapa de Impacto Hídrico](imagens/grafico11.png)
+![Gráfico 11 — Mapa de Impacto Hídrico](imagens/image11.png)
 
 **Por quê:** permite inspecionar a distribuição geográfica das chuvas em anos
 específicos de crise hídrica ou excesso pluviométrico.
@@ -692,7 +692,7 @@ ORDER BY precipitacao_media_mm DESC;
 ciclo ENSO (*El Niño*, *La Niña* e *Neutro*).  
 **Como:** gráfico de colunas verticais comparando os três regimes climáticos.
 
-![Gráfico 12 — Comparativo de Impacto (Médias por Fenômeno)](imagens/grafico12.png)
+![Gráfico 12 — Comparativo de Impacto (Médias por Fenômeno)](imagens/image12.png)
 
 **Por quê:** quando filtrado para um estado específico como o Rio Grande do
 Sul, evidencia numericamente o déficit hídrico característico de anos de
@@ -721,7 +721,7 @@ ORDER BY precipitacao_media_mm DESC;
 o fenômeno ENSO predominante em cada ano (`Neutro`, `El Niño` e `La Niña`).  
 **Como:** gráfico de colunas cronológicas categorizadas por evento climático.
 
-![Gráfico 13 — Linha do Tempo (Chuva vs. Fenômeno)](imagens/grafico13.png)
+![Gráfico 13 — Linha do Tempo (Chuva vs. Fenômeno)](imagens/image13.png)
 
 **Por quê:** evidencia os ciclos plurianuais de estiagem e excesso hídrico ao
 longo das décadas, permitindo correlacionar visualmente sequências de *La Niña*
@@ -752,7 +752,7 @@ o volume total produzido em toneladas (eixo direito), calculados em CTEs
 separadas para evitar multiplicação cartesiana entre municípios e estados.  
 **Como:** gráfico combinado de duas linhas com eixos independentes.
 
-![Gráfico 14 — Chuva vs. Quebra de Safra](imagens/grafico14.png)
+![Gráfico 14 — Chuva vs. Quebra de Safra](imagens/image14.png)
 
 **Por quê:** comprova visualmente a sensibilidade hídrica das lavouras,
 mostrando como vales na curva de precipitação antecedem ou coincidem com
@@ -804,7 +804,7 @@ ORDER BY clima_anual.ano ASC;
 área perdida não colhida (eixo Y direito) em hectares desde 1991.  
 **Como:** gráfico de colunas agrupadas com dois eixos Y independentes.
 
-![Gráfico 15 — Evolução Física da Lavoura: Área Plantada vs. Área Perdida (ha)](imagens/grafico15.png)
+![Gráfico 15 — Evolução Física da Lavoura: Área Plantada vs. Área Perdida (ha)](imagens/image15.png)
 
 **Por quê:** mensura diretamente o prejuízo físico em hectares sofrido pelos
 produtores em anos de adversidade climática, subsidiando pedidos de seguro
@@ -837,7 +837,7 @@ aceleração da taxa de perda (`p.p.`).
 **Como:** gráfico de linhas com eixos independentes (expansão à direita e
 aceleração da perda à esquerda).
 
-![Gráfico 16 — Expansão de Campo (%) vs. Aceleração da Perda (p.p.)](imagens/grafico16.png)
+![Gráfico 16 — Expansão de Campo (%) vs. Aceleração da Perda (p.p.)](imagens/image16.png)
 
 **Por quê:** avalia o risco financeiro da expansão agrícola: identifica anos em
 que o produtor ampliou fortemente o investimento em área plantada e enfrentou
@@ -894,7 +894,7 @@ toneladas.
 cores nas colunas de risco, alimentada pela view materializada
 `mv_matriz_cenarios_enso`.
 
-![Gráfico 17 — Matriz Preditiva de Risco e Investimento por Cenário Climático (ENSO)](imagens/grafico17.png)
+![Gráfico 17 — Matriz Preditiva de Risco e Investimento por Cenário Climático (ENSO)](imagens/image17.png)
 
 **Por quê:** serve como ferramenta de apoio à decisão prospectiva: diante da
 previsão meteorológica para a próxima safra (ex.: confirmação de *La Niña*), o
