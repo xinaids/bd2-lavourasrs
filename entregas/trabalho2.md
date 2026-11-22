@@ -6,7 +6,7 @@
 **Grupo:** Metabase — Mateus, Kerlon e Michel  
 **Docente:** Edimar Manica  
 **Ferramenta:** Metabase (open source, licença AGPL v3)  
-**Base de dados:** Produção Agrícola Municipal (PAM) — IBGE/SIDRA  
+**Base de dados:** Produção Agrícola Municipal (PAM — IBGE/SIDRA, 1990–2025) e Série Climática Histórica / ENSO  
 **Data de entrega:** 27/11/2026  
 
 ---
@@ -22,12 +22,12 @@ município. Ele(a) pode usar essas informações para:
   verificar o peso econômico de cada cultura no estado
 - Direcionar programas de assistência técnica (por exemplo, em parceria com a
   Emater/RS-Ascar) para as culturas e regiões com queda de produtividade
-- Planejar ações de resposta a eventos climáticos adversos (estiagem, geada) e
-  fundamentar pedidos de apoio ao governo estadual e federal
+- Planejar ações de resposta a eventos climáticos adversos (estiagem, excesso
+  hídrico, geada) e fundamentar pedidos de apoio ao governo estadual e federal
 - Subsidiar decisões sobre investimento em infraestrutura rural (armazenagem,
   irrigação, estradas) com base nos municípios e culturas de maior relevância
 - Acompanhar a evolução da produção agrícola ano a ano, com dados oficiais e
-  comparáveis
+  comparáveis, avaliando riscos associados a ciclos de *El Niño* e *La Niña*
 
 O painel não é um relatório técnico para pesquisadores nem uma análise de
 mercado para investidores: as perguntas e a linguagem foram pensadas para quem
@@ -37,14 +37,15 @@ decide as ações de agricultura do município.
 
 ## 2. Objetivo Geral do Dashboard
 
-Analisar a evolução da produção agrícola dos municípios brasileiros, com
-destaque para o Rio Grande do Sul, observando área plantada, produtividade,
-quantidade produzida e valor da produção ao longo da série histórica
-disponível na base do IBGE/SIDRA. O dashboard permite filtrar por cultura, ano e
-estado, busca evidenciar tendências, identificar municípios de destaque
-produtivo e quantificar o impacto de eventos climáticos (como a estiagem de
-2022) na produtividade das lavouras, fornecendo subsídio concreto para a tomada
-de decisão do gestor municipal de agricultura.
+Analisar a evolução da produção agrícola dos municípios brasileiros ao longo de
+**36 safras (1990 a 2025)**, com destaque para o Rio Grande do Sul, observando
+área plantada, área perdida, produtividade (`kg/ha`), quantidade produzida
+(`toneladas`) e valor bruto da produção (`R$`). Estruturado em **5 abas
+temáticas** e **17 visualizações** (além de 5 indicadores-chave), o painel
+permite filtrar dinamicamente por **Cultura**, **Estado**, **Ano**,
+**Município**, **Região** e **Fenômeno Climático (ENSO)**, quantificando o
+impacto histórico de eventos extremos (como as estiagens de 2020–2022 no Sul) e
+oferecendo uma matriz preditiva de risco por cenário climático.
 
 ---
 
@@ -72,11 +73,11 @@ para cada consulta.
    ordenação e junções montados pela interface, sem escrever SQL.
 5. **Editor de SQL nativo** — para consultas mais complexas, com variáveis e
    filtros de campo (*Field Filters*) que viram filtros do dashboard.
-6. **Dashboards interativos** — vários gráficos na mesma tela, com filtros que
-   atuam sobre todos os gráficos conectados.
+6. **Dashboards interativos multi-abas** — organização temática em múltiplas
+   abas na mesma tela, permitindo conectar ou isolar filtros por cartão.
 7. **Variedade de visualizações** — tabela, barras, linhas, área, dispersão,
-   pizza/rosca, mapa, funil, tabela dinâmica (pivot), gráfico combinado, entre
-   outras.
+   pizza/rosca, mapa coroplético, treemap, gráfico combinado com eixo duplo e
+   formatação condicional.
 8. **Modelo de dados com metadados** — permite descrever tabelas e colunas,
    definir tipos semânticos (categoria, moeda, coordenadas) e relacionamentos
    entre tabelas.
@@ -92,454 +93,764 @@ para cada consulta.
 
 ---
 
-## 4. Visualizações do Dashboard
+## 4. Arquitetura de Dados e Views Materializadas (PostgreSQL)
 
-Além dos 10 gráficos abaixo, o dashboard traz 5 indicadores (KPIs): valor
-total da produção, rendimento médio, área plantada, quantidade produzida e
-contagem de municípios. Os filtros disponíveis são cultura, ano e estado.
+A base relacional principal (`producao_agricola`) concentra aproximadamente
+**2,9 milhões de registros** distribuídos entre municípios, culturas, anos e
+variáveis do IBGE/SIDRA, complementada pela tabela estadual `clima_historico`
+(precipitação anual em `mm` e classificação anual do fenômeno ENSO: *El Niño*,
+*La Niña* e *Neutro*).
 
-> **Nota:** o campo **Como** (print com dados reais) será preenchido conforme
-> cada gráfico for finalizado no Metabase. O campo **SQL (registro)** guarda a
-> consulta usada, para que outras pessoas possam reproduzir o gráfico em suas
-> próprias bases.
+Para garantir tempo de resposta interativo nos gráficos analíticos e evitar
+distorções estatísticas ao cruzar granularidades diferentes (dados agrícolas
+municipais × dados climáticos estaduais), foram implementadas **duas Views
+Materializadas** no PostgreSQL:
 
-**Resumo dos gráficos e dos tipos de visualização:**
+1. **`mv_historico_expansao_perda`**
+   - **Propósito:** consolidar anualmente, por Unidade da Federação (`uf`) e
+     `cultura` (além de uma linha totalizadora `'Todas (Total do Estado)'`),
+     as métricas físicas (`area_plantada_ha`, `area_colhida_ha`,
+     `producao_toneladas`), o evento climático vigente (`fenomeno_enso`) e os
+     indicadores derivados de risco:
+     - **Área Perdida (`area_perdida_ha`):** diferença entre a área plantada e
+       a área efetivamente colhida na safra.
+     - **Taxa de Investimento YoY (`taxa_investimento_yoy_pct`):** variação
+       percentual anual na abertura/retração de área plantada.
+     - **Aceleração da Perda (`aceleracao_perda_pp`):** variação em pontos
+       percentuais (`p.p.`) da taxa de frustração de safra em relação ao ano
+       anterior.
+   - **Ganho de desempenho:** elimina junções repetitivas sobre 2,9 milhões de
+     linhas nas consultas de evolução quinquenal, dispersão estadual e análise
+     de perdas.
 
-| Nº | Gráfico | Tipo de visualização |
-|----|---------|----------------------|
-| 1  | Eficiência agrícola por estado | Mapa |
-| 2  | Peso financeiro das culturas | Barras horizontais |
-| 3  | Evolução histórica da produção | Linhas |
-| 4  | Participação das culturas no uso do solo | Rosca (donut) |
-| 5  | Relação entre área plantada e eficiência | Dispersão (scatter) |
-| 6  | Evolução comparativa de culturas | Área empilhada |
-| 7  | Matriz de crescimento regional | Tabela dinâmica (pivot) |
-| 8  | Ranking de municípios polos | Barras horizontais |
-| 9  | Volume produzido × área plantada | Combinado (barras + linha) |
-| 10 | Concentração de riqueza agrícola | Mapa de árvore (treemap) |
-
-São **10 gráficos** e **9 tipos diferentes** de visualização (mapa, barras
-horizontais, linhas, rosca, dispersão, área empilhada, tabela dinâmica,
-combinado e treemap).
-
----
-
-### Gráfico 1 — Eficiência agrícola por estado
-
-**O quê:** rendimento médio (kg/ha, calculado como quantidade produzida ÷ área
-plantada) de cada unidade da federação, para a cultura selecionada no filtro.  
-**Como:** mapa do Brasil, com os estados coloridos por faixa de rendimento.
-
-<!-- ![Gráfico 1](../imagens/grafico1.png) -->
-[inserir print aqui]
-
-**Por quê:** mostra rapidamente quais estados são mais e menos produtivos e
-onde o RS se posiciona, indicando onde a assistência técnica pode ter mais
-efeito.
-
-**SQL (registro):**
-
-```sql
--- preencher após validar no banco
-```
+2. **`mv_matriz_cenarios_enso`**
+   - **Propósito:** agregar toda a série histórica por tripla `(uf, cultura,
+     fenomeno_enso)`, calculando médias históricas de precipitação
+     (`chuva_media_mm`), investimento anual (`taxa_mestre_investimento_pct`),
+     perda física (`perda_media_ha`), percentual médio de quebra
+     (`quebra_media_lavoura_pct`), aceleração média de perda e produção média
+     esperada (`safra_media_toneladas`), acompanhadas da contagem de safras
+     observadas (`anos_ocorrencia`).
+   - **Uso analítico:** alimenta diretamente a matriz preditiva da Aba 5,
+     permitindo simular o comportamento esperado de cada lavoura sob cenários
+     de *El Niño*, *La Niña* ou *Neutro*.
 
 ---
 
-### Gráfico 2 — Peso financeiro das culturas
+## 5. Estrutura e Visualizações do Dashboard
 
-**O quê:** valor total da produção (em bilhões de reais) de cada cultura, para
-o ano e o estado escolhidos nos filtros (padrão: 2023, todos os estados).  
-**Como:** gráfico de barras horizontais, uma barra por cultura, cada uma com uma
-cor, ordenadas da maior para a menor.
+O dashboard é organizado em **5 abas temáticas**, totalizando **5 indicadores
+(KPIs)**, **1 cartão dinâmico de contexto (Legenda)** e **17 gráficos**
+distribuídos de forma equilibrada (entre 2 e 4 visualizações por aba).
 
-![Gráfico 2 — Peso financeiro das culturas](../imagens/grafico2.png)
+### Escopo dos Filtros por Aba
 
-**Por quê:** cria um ranking econômico das culturas e mostra onde está o maior
-retorno financeiro, ajudando a priorizar apoio e políticas.
+Para preservar a coerência analítica — evitando, por exemplo, que um filtro de
+ano único mutile gráficos de série temporal —, cada filtro possui visibilidade e
+conexão configuradas por aba:
+
+| Filtro no Painel | Aba 1 (`Visão Geral`) | Aba 2 (`Evolução Histórica`) | Aba 3 (`Detalhamento Geográfico`) | Aba 4 (`Clima & Pluviometria`) | Aba 5 (`Risco, Perdas e Cenários`) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Cultura** | Visível | Visível | Visível | Visível *(desconectado dos mapas de chuva)* | Visível |
+| **Estado (UF)** | Visível | Visível | Visível | Visível | Visível |
+| **Anos** | Visível | *Oculto* | Visível | Visível *(conectado ao Mapa Hídrico)* | *Oculto* |
+| **Município** | *Oculto* | *Oculto* | Visível | *Oculto* | *Oculto* |
+| **Fenômeno ENSO** | *Oculto* | *Oculto* | *Oculto* | *Oculto* | Visível *(conectado à Matriz Preditiva)* |
+
+---
+
+### Indicadores-Chave (KPIs) e Legenda Dinâmica
+
+Presentes no topo da **Aba 1 (`Visão Geral e Desempenho`)** — enquanto o
+cartão **Legenda** acompanha todas as abas exibindo o recorte ativo (ex.:
+*Todas as culturas • 1990 a 2025 (36 safras)*):
+
+| Indicador (KPI) | Valor Agregado (1990–2025) | Variável IBGE / Fórmula |
+| :--- | :---: | :--- |
+| **Valor Total de Produção em Reais** | `R$ 6,6T` | `SUM(valor) * 1000` (`variavel_id = 215` — Mil Reais) |
+| **Quantidade Produzida em Toneladas** | `25,2B T` | `SUM(valor)` (`variavel_id = 214` — Toneladas) |
+| **Área Plantada em Hectares** | `2,1B Ha` | `SUM(valor)` (`variavel_id IN (109, 2313)`) |
+| **Rendimento Médio de Produção** | `12.074 Kg/Ha` | `(SUM(producao_t) * 1000) / NULLIF(SUM(area_colhida_ha), 0)` |
+| **Quantidade de Municípios Produtores** | `5.550` | `COUNT(DISTINCT municipio_id)` com produção `> 0` |
+
+---
+
+### Resumo dos 17 Gráficos por Aba
+
+| Aba | Nº | Gráfico | Tipo de Visualização | Fonte Principal |
+| :--- | :-: | :--- | :--- | :--- |
+| **1. Visão Geral** | 1 | Participação das culturas no uso do solo | Rosca (Donut) | `producao_agricola` |
+| **1. Visão Geral** | 2 | Comparativo de valor de produção | Colunas (Barras verticais) | `producao_agricola` |
+| **2. Evolução Histórica** | 3 | Relação histórica Volume produzido × Área plantada | Combinado (Barras + Linha, 2 eixos) | `producao_agricola` |
+| **2. Evolução Histórica** | 4 | Evolução de Produção | Linhas | `producao_agricola` |
+| **2. Evolução Histórica** | 5 | Evolução comparativa de culturas | Linhas múltiplas | `producao_agricola` |
+| **2. Evolução Histórica** | 6 | Matriz de crescimento regional (quinquênios) | Tabela com escala de cores | `mv_historico_expansao_perda` |
+| **3. Detalh. Geográfico** | 7 | Mapa de Eficiência de Cultura | Mapa coroplético (Brasil/UF) | `mv_historico_expansao_perda` |
+| **3. Detalh. Geográfico** | 8 | Ranking de Municípios Polos — Top 10 | Colunas (Barras verticais) | `producao_agricola` |
+| **3. Detalh. Geográfico** | 9 | Dispersão de Área vs. Eficiência | Dispersão (Scatter plot) | `mv_historico_expansao_perda` |
+| **3. Detalh. Geográfico** | 10 | Concentração de Riqueza Agrícola | Mapa de árvore (Treemap) | `producao_agricola` |
+| **4. Clima & Pluviometria** | 11 | Mapa de Impacto Hídrico | Mapa coroplético (Brasil/UF) | `clima_historico` |
+| **4. Clima & Pluviometria** | 12 | Comparativo de Impacto (Médias por Fenômeno) | Colunas (Barras verticais) | `clima_historico` |
+| **4. Clima & Pluviometria** | 13 | Linha do Tempo (Chuva vs. Fenômeno) | Colunas agrupadas por evento | `clima_historico` |
+| **4. Clima & Pluviometria** | 14 | Chuva vs. Quebra de Safra | Combinado (2 linhas, 2 eixos) | `clima_historico` + `mv_historico_expansao_perda` |
+| **5. Risco & Cenários** | 15 | Evolução Física: Área Plantada vs. Área Perdida | Combinado (Barras + Linha, 2 eixos) | `mv_historico_expansao_perda` |
+| **5. Risco & Cenários** | 16 | Expansão de Campo (%) vs. Aceleração da Perda (p.p.) | Linhas (2 eixos) | `mv_historico_expansao_perda` |
+| **5. Risco & Cenários** | 17 | Matriz Preditiva de Risco e Investimento (ENSO) | Tabela analítica com escala de cores | `mv_matriz_cenarios_enso` |
+
+---
+
+### Aba 1 — Visão Geral e Desempenho
+
+#### Gráfico 1 — Participação das culturas no uso do solo
+
+**O quê:** participação percentual e absoluta (em hectares) de cada cultura na
+área cultivada total (`variavel_id IN (109, 2313)`, contemplando culturas
+temporárias e área destinada à colheita de culturas permanentes).  
+**Como:** gráfico de rosca (donut) com o total acumulado no centro e o
+percentual de cada lavoura na legenda.  
+**Por quê:** evidencia o grau de concentração territorial do agronegócio (como
+o domínio de Soja com 40,71%, Milho com 25,71% e Cana-de-açúcar com 12,65%) e
+permite ao gestor avaliar a necessidade de políticas de diversificação.
 
 **SQL (registro):**
-
-Versão usada no Metabase (com as variáveis de filtro `ano` e `estado`, ambas do
-tipo Field Filter). A variável `variavel` "Valor da produção" existe em três
-moedas na base (Mil Cruzeiros, Mil Cruzeiros Reais e Mil Reais), por isso a
-consulta filtra a unidade `Mil Reais`:
 
 ```sql
 SELECT
-  p.nome AS cultura,
-  p.nome AS legenda,
-  ROUND(SUM(pa.valor) / 1000000.0, 2) AS bilhoes_de_reais
-FROM producao_agricola pa
-JOIN produto   p ON pa.produto_id   = p.id
-JOIN variavel  v ON pa.variavel_id  = v.id
-JOIN unidade   u ON pa.unidade_id   = u.id
-JOIN municipio m ON pa.municipio_id = m.id
-JOIN estado    e ON m.estado_id     = e.id
-WHERE v.nome = 'Valor da produção (Mil Reais)'
-  AND u.nome = 'Mil Reais'
-  AND {{ano}}
-  [[AND {{estado}}]]
-GROUP BY p.id, p.nome
-ORDER BY bilhoes_de_reais DESC;
+    produto.nome AS cultura,
+    SUM(producao_agricola.valor) AS area_plantada_ha
+FROM producao_agricola
+INNER JOIN produto ON producao_agricola.produto_id = produto.id
+INNER JOIN municipio ON producao_agricola.municipio_id = municipio.id
+INNER JOIN estado ON municipio.estado_id = estado.id
+WHERE producao_agricola.variavel_id IN (109, 2313)
+  [[ AND {{filtro_produto}} ]]
+  [[ AND {{filtro_estado}} ]]
+  [[ AND {{filtro_ano}} ]]
+GROUP BY produto.id, produto.nome
+HAVING SUM(producao_agricola.valor) > 0
+ORDER BY area_plantada_ha DESC;
 ```
 
-Versão para rodar direto no PostgreSQL (sem variáveis do Metabase; troque o ano
-e, se quiser, descomente o filtro de estado):
+---
+
+#### Gráfico 2 — Comparativo de valor de produção
+
+**O quê:** valor bruto da produção em reais (`R$`) por cultura (`variavel_id =
+215` convertida de Mil Reais para Reais), ordenado do maior para o menor.  
+**Como:** gráfico de colunas coloridas por cultura com rótulos de valores no
+topo.  
+**Por quê:** contrapõe o peso econômico ao peso físico das lavouras, mostrando
+quais cadeias geram maior retorno financeiro para o estado ou município.
+
+**SQL (registro):**
 
 ```sql
 SELECT
-  p.nome AS cultura,
-  ROUND(SUM(pa.valor) / 1000000.0, 2) AS bilhoes_de_reais
-FROM producao_agricola pa
-JOIN produto   p ON pa.produto_id   = p.id
-JOIN variavel  v ON pa.variavel_id  = v.id
-JOIN unidade   u ON pa.unidade_id   = u.id
-JOIN municipio m ON pa.municipio_id = m.id
-JOIN estado    e ON m.estado_id     = e.id
-WHERE v.nome = 'Valor da produção (Mil Reais)'
-  AND u.nome = 'Mil Reais'
-  AND pa.ano = 2023
-  -- AND e.nome = 'Rio Grande do Sul'
-GROUP BY p.id, p.nome
-ORDER BY bilhoes_de_reais DESC;
+    produto.nome AS eixo_agrupamento,
+    produto.nome AS cultura,
+    SUM(producao_agricola.valor) * 1000 AS valor_total_producao
+FROM producao_agricola
+INNER JOIN produto ON producao_agricola.produto_id = produto.id
+INNER JOIN municipio ON producao_agricola.municipio_id = municipio.id
+INNER JOIN estado ON municipio.estado_id = estado.id
+WHERE producao_agricola.variavel_id = 215
+  [[ AND {{filtro_produto}} ]]
+  [[ AND {{filtro_estado}} ]]
+  [[ AND {{filtro_ano}} ]]
+GROUP BY produto.id, produto.nome
+HAVING SUM(producao_agricola.valor) > 0
+ORDER BY valor_total_producao DESC;
 ```
 
 ---
 
-### Gráfico 3 — Evolução histórica da produção
+### Aba 2 — Evolução Histórica
 
-**O quê:** quantidade produzida (ou valor da produção) por ano, de 2013 a 2023,
-para a cultura e o estado selecionados.  
-**Como:** gráfico de linhas (série temporal), com os anos no eixo X.
+#### Gráfico 3 — Relação histórica Volume produzido × Área plantada
 
-<!-- ![Gráfico 3](../imagens/grafico3.png) -->
-[inserir print aqui]
-
-**Por quê:** evidencia tendências de crescimento, estagnação e quebras de safra
-por seca ou geada (como a estiagem de 2022 no RS), apoiando planejamento e
-resposta a eventos climáticos.
+**O quê:** comparação anual entre a quantidade produzida em toneladas (eixo Y
+esquerdo) e a área plantada em hectares (eixo Y direito) de 1990 a 2025.  
+**Como:** gráfico combinado com barras azuis para toneladas e linha verde com
+marcadores para hectares.  
+**Por quê:** permite distinguir se o crescimento da produção decorreu de
+expansão territorial ou de ganhos tecnológicos de produtividade por hectare.
 
 **SQL (registro):**
-
-```sql
--- preencher após validar no banco
-```
-
----
-
-### Gráfico 4 — Participação das culturas no uso do solo
-
-**O quê:** percentual da área plantada (em hectares) de cada cultura em relação
-ao total, para o ano e o estado escolhidos nos filtros (padrão: 2023, todos os
-estados). Para o café, que é cultura permanente, usa-se a área destinada à
-colheita, pois a base não traz área plantada para ele.  
-**Como:** gráfico de rosca (donut), com o total de hectares no centro e o
-percentual de cada cultura na legenda.
-
-![Gráfico 4 — Participação das culturas no uso do solo](../imagens/grafico4.png)
-
-**Por quê:** mostra quais culturas ocupam mais espaço no território e o quanto
-a produção depende de poucas culturas. O gestor pode avaliar essa dependência e
-decidir entre incentivar a diversificação ou reforçar o apoio às culturas
-dominantes.
-
-**SQL (registro):**
-
-Versão usada no Metabase (com as variáveis de filtro `ano` e `estado`, ambas do
-tipo Field Filter). A consulta usa a variável "Área plantada" para todas as
-culturas e "Área destinada à colheita" apenas para o café, evitando contar a
-mesma área duas vezes:
 
 ```sql
 SELECT
-  p.nome AS cultura,
-  SUM(pa.valor) AS hectares
-FROM producao_agricola pa
-JOIN produto   p ON pa.produto_id   = p.id
-JOIN variavel  v ON pa.variavel_id  = v.id
-JOIN municipio m ON pa.municipio_id = m.id
-JOIN estado    e ON m.estado_id     = e.id
-WHERE (   v.nome = 'Área plantada (Hectares)'
-       OR (v.nome = 'Área destinada à colheita (Hectares)' AND p.nome ILIKE 'Café%'))
-  AND {{ano}}
-  [[AND {{estado}}]]
-GROUP BY p.id, p.nome
-ORDER BY hectares DESC;
+    producao_agricola.ano AS ano_safra,
+    SUM(CASE WHEN producao_agricola.variavel_id = 214 THEN producao_agricola.valor ELSE 0 END) AS quantidade_produzida,
+    SUM(CASE WHEN producao_agricola.variavel_id IN (109, 2313) THEN producao_agricola.valor ELSE 0 END) AS area_plantada
+FROM producao_agricola
+INNER JOIN produto ON producao_agricola.produto_id = produto.id
+INNER JOIN municipio ON producao_agricola.municipio_id = municipio.id
+INNER JOIN estado ON municipio.estado_id = estado.id
+WHERE producao_agricola.variavel_id IN (214, 109, 2313)
+  [[ AND {{filtro_produto}} ]]
+  [[ AND {{filtro_estado}} ]]
+GROUP BY producao_agricola.ano
+ORDER BY producao_agricola.ano ASC;
 ```
 
-Versão para rodar direto no PostgreSQL (sem variáveis do Metabase; troque o ano
-e, se quiser, descomente o filtro de estado):
+---
+
+#### Gráfico 4 — Evolução de Produção
+
+**O quê:** série temporal do volume físico colhido (em toneladas) entre 1990 e
+2025.  
+**Como:** gráfico de linhas com marcadores anuais.  
+**Por quê:** destaca a trajetória estrutural da safra e evidencia visualmente
+quedas abruptas causadas por choques climáticos (como as quebras de 2005, 2012
+e 2022 no Rio Grande do Sul).
+
+**SQL (registro):**
 
 ```sql
 SELECT
-  p.nome AS cultura,
-  SUM(pa.valor) AS hectares
-FROM producao_agricola pa
-JOIN produto   p ON pa.produto_id   = p.id
-JOIN variavel  v ON pa.variavel_id  = v.id
-JOIN municipio m ON pa.municipio_id = m.id
-JOIN estado    e ON m.estado_id     = e.id
-WHERE (   v.nome = 'Área plantada (Hectares)'
-       OR (v.nome = 'Área destinada à colheita (Hectares)' AND p.nome ILIKE 'Café%'))
-  AND pa.ano = 2023
-  -- AND e.nome = 'Rio Grande do Sul'
-GROUP BY p.id, p.nome
-ORDER BY hectares DESC;
+    producao_agricola.ano AS ano,
+    SUM(producao_agricola.valor) AS quantidade_total
+FROM producao_agricola
+INNER JOIN produto ON producao_agricola.produto_id = produto.id
+INNER JOIN municipio ON producao_agricola.municipio_id = municipio.id
+INNER JOIN estado ON municipio.estado_id = estado.id
+WHERE producao_agricola.variavel_id = 214
+  [[ AND {{filtro_produto}} ]]
+  [[ AND {{filtro_estado}} ]]
+GROUP BY producao_agricola.ano
+ORDER BY producao_agricola.ano ASC;
 ```
 
 ---
 
-### Gráfico 5 — Relação entre área plantada e eficiência
+#### Gráfico 5 — Evolução comparativa de culturas
 
-**O quê:** área plantada (eixo X) cruzada com o rendimento médio em kg/ha (eixo
-Y) para cada estado produtor.  
-**Como:** gráfico de dispersão (scatter), com um ponto por estado.
-
-<!-- ![Gráfico 5](../imagens/grafico5.png) -->
-[inserir print aqui]
-
-**Por quê:** mostra que o maior estado não é necessariamente o mais produtivo,
-identificando estados que produzem muito em pouca área e estados com grandes
-áreas e baixa eficiência. A assistência técnica pode priorizar estados com
-muita área e baixa eficiência e usar os mais eficientes como referência de boas
-práticas.
+**O quê:** evolução histórica do valor da produção (`R$`) desagregada por
+cultura de 1990 a 2025.  
+**Como:** gráfico de linhas múltiplas coloridas por cultura.  
+**Por quê:** demonstra a transformação econômica do campo ao longo de três
+décadas, evidenciando o salto financeiro da soja e do milho a partir de 2020.
 
 **SQL (registro):**
-
-```sql
--- preencher após validar no banco
-```
-
----
-
-### Gráfico 6 — Evolução comparativa de culturas
-
-**O quê:** valor da produção das principais culturas ao longo dos anos.  
-**Como:** gráfico de área empilhada.
-
-<!-- ![Gráfico 6](../imagens/grafico6.png) -->
-[inserir print aqui]
-
-**Por quê:** mostra o crescimento histórico do setor e como a proporção de cada
-cultura muda com o tempo, por exemplo se a soja está ocupando o espaço que era
-de outro produto. O gestor pode antecipar mudanças no perfil produtivo, como o
-avanço da soja, e adaptar capacitação e crédito às culturas que crescem.
-
-**SQL (registro):**
-
-```sql
--- preencher após validar no banco
-```
-
----
-
-### Gráfico 7 — Matriz de crescimento regional
-
-**O quê:** valor total da produção, com os estados nas linhas e os anos nas
-colunas.  
-**Como:** tabela dinâmica (pivot table).
-
-<!-- ![Gráfico 7](../imagens/grafico7.png) -->
-[inserir print aqui]
-
-**Por quê:** permite ler os dados em formato de matriz e identificar
-rapidamente quais estados estão estagnados e quais estão em expansão ano após
-ano. O gestor pode identificar estados e anos de queda e direcionar apoio às
-regiões estagnadas, usando os números exatos em relatórios.
-
-**SQL (registro):**
-
-```sql
--- preencher após validar no banco
-```
-
----
-
-### Gráfico 8 — Ranking de municípios polos
-
-**O quê:** os 10 municípios com maior quantidade produzida (toneladas) da
-cultura selecionada, para o ano e o estado escolhidos nos filtros (padrão:
-soja, 2023, todos os estados).  
-**Como:** gráfico de barras horizontais, com uma cor para cada município.
-
-![Gráfico 8 — Ranking de municípios polos](../imagens/grafico8.png)
-
-**Por quê:** desce da visão por estado para os municípios que realmente movem a
-produção, e permite ao gestor municipal comparar seu município com os líderes.
-
-**SQL (registro):**
-
-Versão usada no Metabase (com as variáveis de filtro `cultura`, `ano` e
-`estado`, as três do tipo Field Filter, que geram listas de seleção no
-dashboard):
 
 ```sql
 SELECT
-  m.nome || ' - ' || e.nome AS municipio,
-  m.nome || ' - ' || e.nome AS legenda,
-  SUM(pa.valor) AS toneladas
-FROM producao_agricola pa
-JOIN municipio m ON pa.municipio_id = m.id
-JOIN estado    e ON m.estado_id     = e.id
-JOIN produto   p ON pa.produto_id   = p.id
-JOIN variavel  v ON pa.variavel_id  = v.id
-WHERE v.nome = 'Quantidade produzida (Toneladas)'
-  AND {{cultura}}
-  AND {{ano}}
-  [[AND {{estado}}]]
-GROUP BY m.id, m.nome, e.nome
-ORDER BY toneladas DESC
+    producao_agricola.ano AS ano,
+    produto.nome AS cultura,
+    SUM(producao_agricola.valor) * 1000 AS valor_producao
+FROM producao_agricola
+INNER JOIN produto ON producao_agricola.produto_id = produto.id
+INNER JOIN municipio ON producao_agricola.municipio_id = municipio.id
+INNER JOIN estado ON municipio.estado_id = estado.id
+WHERE producao_agricola.variavel_id = 215
+  [[ AND {{filtro_produto}} ]]
+  [[ AND {{filtro_estado}} ]]
+GROUP BY producao_agricola.ano, produto.nome
+ORDER BY producao_agricola.ano ASC, valor_producao DESC;
+```
+
+---
+
+#### Gráfico 6 — Matriz de crescimento regional
+
+**O quê:** volume produzido (em toneladas) por estado agrupado em 7 intervalos
+quinquenais (`1990 - 1995` a `2021 a 2025`), com filtro adicional por
+macrorregião ou fronteira agrícola (`MATOPIBA`, `SEALBA`, `AMACRO`).  
+**Como:** tabela matricial com formatação condicional (gradiente de cor por
+intensidade de produção) lida diretamente da view materializada
+`mv_historico_expansao_perda`.  
+**Por quê:** permite comparar o avanço das novas fronteiras agrícolas
+(Centro-Oeste e MATOPIBA) frente às regiões produtoras tradicionais (Sul e
+Sudeste).
+
+**SQL (registro):**
+
+```sql
+SELECT 
+    estado.nome AS estado,
+    ROUND(SUM(CASE WHEN mv_historico_expansao_perda.ano BETWEEN 1990 AND 1995 THEN mv_historico_expansao_perda.producao_toneladas ELSE 0 END), 0) AS "1990 - 1995",
+    ROUND(SUM(CASE WHEN mv_historico_expansao_perda.ano BETWEEN 1996 AND 2000 THEN mv_historico_expansao_perda.producao_toneladas ELSE 0 END), 0) AS "1996 - 2000",
+    ROUND(SUM(CASE WHEN mv_historico_expansao_perda.ano BETWEEN 2001 AND 2005 THEN mv_historico_expansao_perda.producao_toneladas ELSE 0 END), 0) AS "2001 - 2005",
+    ROUND(SUM(CASE WHEN mv_historico_expansao_perda.ano BETWEEN 2006 AND 2010 THEN mv_historico_expansao_perda.producao_toneladas ELSE 0 END), 0) AS "2006 - 2010",
+    ROUND(SUM(CASE WHEN mv_historico_expansao_perda.ano BETWEEN 2011 AND 2015 THEN mv_historico_expansao_perda.producao_toneladas ELSE 0 END), 0) AS "2011 - 2015",
+    ROUND(SUM(CASE WHEN mv_historico_expansao_perda.ano BETWEEN 2016 AND 2020 THEN mv_historico_expansao_perda.producao_toneladas ELSE 0 END), 0) AS "2016 - 2020",
+    ROUND(SUM(CASE WHEN mv_historico_expansao_perda.ano >= 2021 THEN mv_historico_expansao_perda.producao_toneladas ELSE 0 END), 0) AS "2021 a 2025"
+FROM mv_historico_expansao_perda
+INNER JOIN estado ON mv_historico_expansao_perda.uf = estado.sigla
+WHERE mv_historico_expansao_perda.cultura <> 'Todas (Total do Estado)'
+  [[ AND {{filtro_estado}} ]]
+  [[ AND {{filtro_produto}} ]]
+  [[ AND (
+      ('Norte' IN ({{filtro_regiao}}) AND estado.nome IN ('Acre', 'Amapá', 'Amazonas', 'Pará', 'Rondônia', 'Roraima', 'Tocantins')) OR
+      ('Nordeste' IN ({{filtro_regiao}}) AND estado.nome IN ('Alagoas', 'Bahia', 'Ceará', 'Maranhão', 'Paraíba', 'Pernambuco', 'Piauí', 'Rio Grande do Norte', 'Sergipe')) OR
+      ('Centro-Oeste' IN ({{filtro_regiao}}) AND estado.nome IN ('Goiás', 'Mato Grosso', 'Mato Grosso do Sul', 'Distrito Federal')) OR
+      ('Sudeste' IN ({{filtro_regiao}}) AND estado.nome IN ('Espírito Santo', 'Minas Gerais', 'Rio de Janeiro', 'São Paulo')) OR
+      ('Sul' IN ({{filtro_regiao}}) AND estado.nome IN ('Paraná', 'Rio Grande do Sul', 'Santa Catarina')) OR
+      ('MATOPIBA' IN ({{filtro_regiao}}) AND estado.nome IN ('Maranhão', 'Tocantins', 'Piauí', 'Bahia')) OR
+      ('SEALBA' IN ({{filtro_regiao}}) AND estado.nome IN ('Sergipe', 'Alagoas', 'Bahia')) OR
+      ('AMACRO' IN ({{filtro_regiao}}) AND estado.nome IN ('Amazonas', 'Acre', 'Rondônia'))
+  ) ]]
+GROUP BY estado.nome
+HAVING SUM(mv_historico_expansao_perda.producao_toneladas) > 0
+ORDER BY estado.nome ASC;
+```
+
+---
+
+### Aba 3 — Detalhamento Geográfico
+
+#### Gráfico 7 — Mapa de Eficiência de Cultura
+
+**O quê:** rendimento médio ponderado (`kg/ha`) por Unidade da Federação,
+calculado pela razão entre produção total em quilogramas e área colhida em
+hectares.  
+**Como:** mapa coroplético do Brasil dividido por estados.  
+**Por quê:** permite comparar instantaneamente a eficiência agronômica do Rio
+Grande do Sul frente aos demais estados produtores.
+
+**SQL (registro):**
+
+```sql
+SELECT
+    mv_historico_expansao_perda.uf AS estado,
+    ROUND(
+        (SUM(mv_historico_expansao_perda.producao_toneladas) * 1000) /
+        NULLIF(SUM(mv_historico_expansao_perda.area_colhida_ha), 0),
+        0
+    ) AS rendimento_medio_kg_ha
+FROM mv_historico_expansao_perda
+WHERE mv_historico_expansao_perda.cultura <> 'Todas (Total do Estado)'
+  [[ AND {{filtro_estado}} ]]
+  [[ AND {{filtro_produto}} ]]
+  [[ AND {{filtro_ano}} ]]
+GROUP BY mv_historico_expansao_perda.uf
+HAVING SUM(mv_historico_expansao_perda.area_colhida_ha) > 0
+ORDER BY rendimento_medio_kg_ha DESC;
+```
+
+---
+
+#### Gráfico 8 — Ranking de Municípios Polos — Top 10
+
+**O quê:** os 10 municípios com maior volume produzido (em toneladas) de acordo
+com os filtros de cultura, estado, ano e município selecionados.  
+**Como:** gráfico de colunas com cores distintas por município e rótulos de
+volume no topo.  
+**Por quê:** desce da escala estadual para a municipal, identificando os polos
+produtores que lideram a safra e servem de parâmetro comparativo para a gestão
+local.
+
+**SQL (registro):**
+
+```sql
+SELECT
+    municipio.nome || ' - ' || estado.sigla AS municipio_estado,
+    municipio.nome || ' - ' || estado.sigla AS municipio_legenda,
+    SUM(producao_agricola.valor) AS quantidade_produzida_toneladas
+FROM producao_agricola
+INNER JOIN produto ON producao_agricola.produto_id = produto.id
+INNER JOIN municipio ON producao_agricola.municipio_id = municipio.id
+INNER JOIN estado ON municipio.estado_id = estado.id
+WHERE producao_agricola.variavel_id = 214
+  [[ AND {{filtro_produto}} ]]
+  [[ AND {{filtro_estado}} ]]
+  [[ AND {{filtro_ano}} ]]
+  [[ AND {{filtro_municipio}} ]]
+GROUP BY municipio.id, municipio.nome, estado.sigla
+HAVING SUM(producao_agricola.valor) > 0
+ORDER BY quantidade_produzida_toneladas DESC
 LIMIT 10;
 ```
 
-Versão para rodar direto no PostgreSQL (sem variáveis do Metabase; troque a
-cultura, o ano e, se quiser, descomente o filtro de estado):
+---
+
+#### Gráfico 9 — Dispersão de Área vs. Eficiência
+
+**O quê:** cruzamento entre área plantada em hectares (eixo X) e rendimento
+médio em `kg/ha` (eixo Y) para cada estado produtor.  
+**Como:** gráfico de dispersão (scatter plot) com uma bolha por estado.  
+**Por quê:** diferencia estados extensivos de estados intensivos em
+tecnologia, mostrando onde há oportunidade de elevar a produtividade sem
+depender apenas de abertura de novas áreas.
+
+**SQL (registro):**
+
+```sql
+SELECT 
+    estado.nome AS estado,
+    SUM(mv_historico_expansao_perda.area_plantada_ha) AS area_plantada,
+    ROUND(
+        (SUM(mv_historico_expansao_perda.producao_toneladas) * 1000) /
+        NULLIF(SUM(mv_historico_expansao_perda.area_colhida_ha), 0),
+        0
+    ) AS rendimento_medio_kg_ha
+FROM mv_historico_expansao_perda
+INNER JOIN estado ON mv_historico_expansao_perda.uf = estado.sigla
+WHERE mv_historico_expansao_perda.cultura <> 'Todas (Total do Estado)'
+  [[ AND {{filtro_estado}} ]]
+  [[ AND {{filtro_produto}} ]]
+  [[ AND {{filtro_ano}} ]]
+GROUP BY estado.nome
+HAVING SUM(mv_historico_expansao_perda.area_plantada_ha) > 0
+ORDER BY area_plantada DESC;
+```
+
+---
+
+#### Gráfico 10 — Concentração de Riqueza Agrícola
+
+**O quê:** participação proporcional de cada estado no valor bruto total da
+produção nacional (`R$`).  
+**Como:** mapa de árvore (treemap) exibindo o valor absoluto e o percentual de
+cada UF (liderado por MT com 19,69%, SP com 13,32%, PR com 12,44%, MG com
+11,27% e RS com 9,92%).  
+**Por quê:** ilustra a concentração econômica do agronegócio brasileiro e
+dimensiona o peso financeiro do Rio Grande do Sul na balança agrícola
+nacional.
+
+**SQL (registro):**
 
 ```sql
 SELECT
-  m.nome || ' - ' || e.nome AS municipio,
-  SUM(pa.valor) AS toneladas
-FROM producao_agricola pa
-JOIN municipio m ON pa.municipio_id = m.id
-JOIN estado    e ON m.estado_id     = e.id
-JOIN produto   p ON pa.produto_id   = p.id
-JOIN variavel  v ON pa.variavel_id  = v.id
-WHERE v.nome = 'Quantidade produzida (Toneladas)'
-  AND p.nome ILIKE 'Soja%'
-  AND pa.ano = 2023
-  -- AND e.nome = 'Rio Grande do Sul'
-GROUP BY m.id, m.nome, e.nome
-ORDER BY toneladas DESC
-LIMIT 10;
+    estado.sigla AS estado,
+    SUM(producao_agricola.valor) * 1000 AS valor_total_producao
+FROM producao_agricola
+INNER JOIN produto ON producao_agricola.produto_id = produto.id
+INNER JOIN municipio ON producao_agricola.municipio_id = municipio.id
+INNER JOIN estado ON municipio.estado_id = estado.id
+WHERE producao_agricola.variavel_id = 215
+  [[ AND {{filtro_produto}} ]]
+  [[ AND {{filtro_estado}} ]]
+  [[ AND {{filtro_ano}} ]]
+GROUP BY estado.sigla
+HAVING SUM(producao_agricola.valor) > 0
+ORDER BY valor_total_producao DESC;
 ```
 
 ---
 
-### Gráfico 9 — Relação histórica entre volume produzido e área plantada
+### Aba 4 — Clima & Pluviometria
 
-**O quê:** quantidade produzida (toneladas) e área plantada ao longo dos anos,
-para o produto filtrado.  
-**Como:** gráfico combinado, com barras para a quantidade produzida e linha
-para a área plantada.
+#### Gráfico 11 — Mapa de Impacto Hídrico
 
-<!-- ![Gráfico 9](../imagens/grafico9.png) -->
-[inserir print aqui]
-
-**Por quê:** mostra como a produção cresceu. Se as barras sobem e a linha de
-área fica estável, houve ganho de produtividade. Se ambas sobem juntas, o
-crescimento veio da expansão da área plantada. O gestor pode usar essa leitura
-para decidir se o apoio deve focar em ganho de produtividade ou em ampliação de
-área.
+**O quê:** distribuição espacial da precipitação média anual (em milímetros)
+pelos estados brasileiros, filtrável por ano e estado.  
+**Como:** mapa coroplético do Brasil colorido por faixa pluviométrica (`mm`).  
+**Por quê:** permite inspecionar a distribuição geográfica das chuvas em anos
+específicos de crise hídrica ou excesso pluviométrico.
 
 **SQL (registro):**
 
 ```sql
--- preencher após validar no banco
+SELECT 
+    estado.sigla,
+    ROUND(AVG(clima_historico.precipitacao_anual_mm)::numeric, 2) AS precipitacao_media_mm
+FROM clima_historico
+INNER JOIN estado 
+    ON clima_historico.estado_id = estado.id
+WHERE 1=1
+  [[ AND {{filtro_estado}} ]]
+  [[ AND {{ano_analise}} ]]
+GROUP BY estado.sigla
+ORDER BY precipitacao_media_mm DESC;
 ```
 
 ---
 
-### Gráfico 10 — Concentração de riqueza agrícola
+#### Gráfico 12 — Comparativo de Impacto (Médias por Fenômeno)
 
-**O quê:** participação de cada estado no valor total da produção nacional.  
-**Como:** mapa de árvore (treemap), com retângulos proporcionais ao valor.
-
-<!-- ![Gráfico 10](../imagens/grafico10.png) -->
-[inserir print aqui]
-
-**Por quê:** é mais legível que uma pizza quando há 27 estados e mostra
-rapidamente a dominância econômica de alguns estados e o peso relativo do RS.
-Permite dimensionar o peso econômico de cada estado e do RS no país, apoiando
-pedidos de recursos e políticas para o setor.
+**O quê:** precipitação média histórica (`mm`) agrupada pelas três fases do
+ciclo ENSO (*El Niño*, *La Niña* e *Neutro*).  
+**Como:** gráfico de colunas verticais comparando os três regimes climáticos.  
+**Por quê:** quando filtrado para um estado específico como o Rio Grande do
+Sul, evidencia numericamente o déficit hídrico característico de anos de
+*La Niña* frente ao aumento de chuvas em anos de *El Niño*.
 
 **SQL (registro):**
 
 ```sql
--- preencher após validar no banco
+SELECT 
+    clima_historico.fenomeno_enso, 
+    ROUND(AVG(clima_historico.precipitacao_anual_mm)::numeric, 2) AS precipitacao_media_mm
+FROM clima_historico
+INNER JOIN estado 
+    ON clima_historico.estado_id = estado.id
+WHERE clima_historico.fenomeno_enso IS NOT NULL
+  [[ AND {{sigla_estado}} ]]
+GROUP BY clima_historico.fenomeno_enso
+ORDER BY precipitacao_media_mm DESC;
 ```
 
 ---
 
-## 5. Potencialidades da Ferramenta
+#### Gráfico 13 — Linha do Tempo (Chuva vs. Fenômeno)
+
+**O quê:** série histórica anual da precipitação média (`mm`) colorida conforme
+o fenômeno ENSO predominante em cada ano (`Neutro`, `El Niño` e `La Niña`).  
+**Como:** gráfico de colunas cronológicas categorizadas por evento climático.  
+**Por quê:** evidencia os ciclos plurianuais de estiagem e excesso hídrico ao
+longo das décadas, permitindo correlacionar visualmente sequências de *La Niña*
+com quedas de safra.
+
+**SQL (registro):**
+
+```sql
+SELECT 
+    clima_historico.ano, 
+    ROUND(AVG(clima_historico.precipitacao_anual_mm)::numeric, 2) AS precipitacao_media_mm, 
+    clima_historico.fenomeno_enso
+FROM clima_historico
+INNER JOIN estado 
+    ON clima_historico.estado_id = estado.id
+WHERE clima_historico.fenomeno_enso IS NOT NULL
+  [[ AND {{sigla_estado}} ]]
+GROUP BY clima_historico.ano, clima_historico.fenomeno_enso
+ORDER BY clima_historico.ano ASC;
+```
+
+---
+
+#### Gráfico 14 — Chuva vs. Quebra de Safra
+
+**O quê:** sobreposição da precipitação média anual (`mm`, eixo esquerdo) com
+o volume total produzido em toneladas (eixo direito), calculados em CTEs
+separadas para evitar multiplicação cartesiana entre municípios e estados.  
+**Como:** gráfico combinado de duas linhas com eixos independentes.  
+**Por quê:** comprova visualmente a sensibilidade hídrica das lavouras,
+mostrando como vales na curva de precipitação antecedem ou coincidem com
+quebras bruscas na colheita.
+
+**SQL (registro):**
+
+```sql
+WITH clima_anual AS (
+    SELECT 
+        clima_historico.ano,
+        ROUND(AVG(clima_historico.precipitacao_anual_mm)::numeric, 2) AS precipitacao_media_mm
+    FROM clima_historico
+    INNER JOIN estado 
+        ON clima_historico.estado_id = estado.id
+    WHERE 1=1
+      [[ AND {{sigla_estado}} ]]
+    GROUP BY clima_historico.ano
+),
+producao_anual AS (
+    SELECT 
+        mv_historico_expansao_perda.ano,
+        SUM(mv_historico_expansao_perda.producao_toneladas) AS total_producao_toneladas
+    FROM mv_historico_expansao_perda
+    INNER JOIN estado 
+        ON mv_historico_expansao_perda.uf = estado.sigla
+    WHERE mv_historico_expansao_perda.cultura <> 'Todas (Total do Estado)'
+      [[ AND {{sigla_estado}} ]]
+      [[ AND {{cultura}} ]]
+    GROUP BY mv_historico_expansao_perda.ano
+)
+SELECT 
+    clima_anual.ano,
+    clima_anual.precipitacao_media_mm,
+    producao_anual.total_producao_toneladas
+FROM clima_anual
+INNER JOIN producao_anual 
+    ON clima_anual.ano = producao_anual.ano
+ORDER BY clima_anual.ano ASC;
+```
+
+---
+
+### Aba 5 — Risco, Perdas e Cenários
+
+#### Gráfico 15 — Evolução Física da Lavoura: Área Plantada vs. Área Perdida (ha)
+
+**O quê:** comparação anual entre a área total plantada (eixo Y esquerdo) e a
+área perdida não colhida (eixo Y direito) em hectares desde 1991.  
+**Como:** gráfico de colunas agrupadas com dois eixos Y independentes.  
+**Por quê:** mensura diretamente o prejuízo físico em hectares sofrido pelos
+produtores em anos de adversidade climática, subsidiando pedidos de seguro
+agrícola e renegociação de crédito rural.
+
+**SQL (registro):**
+
+```sql
+SELECT 
+    ano AS "Ano",
+    MAX(fenomeno_enso) AS "Evento",
+    SUM(area_plantada_ha) AS "Área Plantada (ha)",
+    SUM(area_perdida_ha) AS "Área Perdida (ha)"
+FROM mv_historico_expansao_perda
+WHERE ano >= 1991
+  AND cultura <> 'Todas (Total do Estado)'
+  [[ AND {{cultura}} ]]
+  [[ AND {{sigla_estado}} ]]
+GROUP BY ano
+ORDER BY ano ASC;
+```
+
+---
+
+#### Gráfico 16 — Expansão de Campo (%) vs. Aceleração da Perda (p.p.)
+
+**O quê:** cruzamento dinâmico (recalculado via funções de janela `LAG()` sobre
+os agregados anuais) entre a taxa anual de expansão da área plantada (`%`) e a
+aceleração da taxa de perda (`p.p.`).  
+**Como:** gráfico de linhas com eixos independentes (expansão à direita e
+aceleração da perda à esquerda).  
+**Por quê:** avalia o risco financeiro da expansão agrícola: identifica anos em
+que o produtor ampliou fortemente o investimento em área plantada e enfrentou
+salto abrupto na frustração de colheita.
+
+**SQL (registro):**
+
+```sql
+WITH base_anual AS (
+    SELECT 
+        ano,
+        MAX(fenomeno_enso) AS evento,
+        SUM(area_plantada_ha) AS area_plantada,
+        SUM(area_perdida_ha) AS area_perdida
+    FROM mv_historico_expansao_perda
+    WHERE ano >= 1990
+      AND cultura <> 'Todas (Total do Estado)'
+      [[ AND {{cultura}} ]]
+      [[ AND {{sigla_estado}} ]]
+    GROUP BY ano
+),
+metricas_yoy AS (
+    SELECT 
+        ano AS "Ano",
+        evento AS "Evento",
+        ROUND(
+            ((area_plantada - LAG(area_plantada) OVER (ORDER BY ano)) / 
+            NULLIF(LAG(area_plantada) OVER (ORDER BY ano), 0)) * 100,
+            2
+        ) AS "Expansão de Campo (%)",
+        ROUND(
+            ((area_perdida / NULLIF(area_plantada, 0)) * 100) - 
+            ((LAG(area_perdida) OVER (ORDER BY ano) / NULLIF(LAG(area_perdida) OVER (ORDER BY ano), 0)) * 100),
+            2
+        ) AS "Aceleração da Perda (p.p.)"
+    FROM base_anual
+)
+SELECT *
+FROM metricas_yoy
+WHERE "Ano" >= 1991
+ORDER BY "Ano" ASC;
+```
+
+---
+
+#### Gráfico 17 — Matriz Preditiva de Risco e Investimento por Cenário Climático (ENSO)
+
+**O quê:** consolidação preditiva baseada no histórico observado de 36 safras,
+detalhando por UF, cultura e cenário climático (*El Niño*, *La Niña* ou
+*Neutro*) a chuva média esperada, taxa média de investimento, perda média em
+hectares, percentual médio de quebra, aceleração da perda e safra esperada em
+toneladas.  
+**Como:** tabela analítica interativa com formatação condicional em escala de
+cores nas colunas de risco, alimentada pela view materializada
+`mv_matriz_cenarios_enso`.  
+**Por quê:** serve como ferramenta de apoio à decisão prospectiva: diante da
+previsão meteorológica para a próxima safra (ex.: confirmação de *La Niña*), o
+gestor identifica imediatamente quais culturas do seu estado possuem maior
+probabilidade histórica de quebra.
+
+**SQL (registro):**
+
+```sql
+SELECT
+  uf AS "UF",
+  cultura AS "Cultura",
+  fenomeno_enso AS "Evento Climático",
+  anos_ocorrencia AS "Anos Analisados",
+  chuva_media_mm AS "Chuva Média (mm)",
+  taxa_mestre_investimento_pct AS "Taxa Mestre Investimento (% a.a.)",
+  perda_media_ha AS "Perda Média (ha)",
+  quebra_media_lavoura_pct AS "Quebra Média (%)",
+  crescimento_medio_perda_yoy_pct AS "Crescimento da Perda YoY (%)",
+  aceleracao_media_perda_pp AS "Aceleração da Perda (p.p.)",
+  safra_media_toneladas AS "Safra Esperada (Ton)"
+FROM
+  mv_matriz_cenarios_enso
+WHERE
+  cultura <> 'Todas (Total do Estado)'
+  AND safra_media_toneladas > 0
+  [[ AND {{cultura}} ]]
+  [[ AND {{sigla_estado}} ]]
+  [[ AND {{previsao_fenomeno}} ]]
+ORDER BY
+  uf ASC,
+  quebra_media_lavoura_pct DESC NULLS LAST;
+```
+
+---
+
+## 6. Potencialidades da Ferramenta
 
 1. **Gratuito e open source** — zero custo de licenciamento; a versão
    Community Edition oferece todas as funcionalidades essenciais de BI sem
    exigir contrato ou pagamento de assinatura.
-
 2. **Interface visual sem SQL para consultas básicas** — usuários sem
    conhecimento de banco de dados conseguem montar perguntas, filtros e
    agrupamentos arrastando campos pela interface, sem escrever uma linha de
    código.
-
 3. **Joins visuais entre tabelas relacionais** — o editor de modelo de dados
    permite definir relacionamentos entre tabelas (chaves estrangeiras) de forma
    gráfica, e o Metabase os traduz automaticamente em JOINs nas consultas
-   geradas, dispensando SQL manual para navegação entre dimensões.
-
+   geradas.
 4. **Variedade de tipos de visualização no mesmo motor de dados** — a mesma
-   consulta pode ser apresentada como tabela, gráfico de barras, linha, pizza,
-   funil ou mapa coroplético sem alterar a query, facilitando a escolha do
+   consulta pode ser apresentada como tabela, gráfico de barras, linha, rosca,
+   treemap ou mapa coroplético sem alterar a query, facilitando a escolha do
    visual mais adequado a cada público.
-
 5. **Self-hosted via Docker — controle total sobre hospedagem dos dados** — é
    possível rodar o Metabase inteiramente na infraestrutura própria, sem
    enviar dados a servidores de terceiros, atendendo requisitos de privacidade
-   e LGPD em projetos com dados sensíveis.
-
+   e LGPD.
 6. **Filtros de dashboard a partir de variáveis no SQL nativo** — ao marcar uma
-   variável como *Field Filter*, o Metabase gera automaticamente listas de
-   seleção (cultura, ano, estado) no dashboard, mesmo em consultas escritas à
-   mão, como nos gráficos 2, 4 e 8.
-
-7. **Gráfico combinado com eixo duplo** — séries com escalas muito diferentes
-   (rendimento em kg/ha e chuva em mm) podem ser sobrepostas no mesmo gráfico,
-   cada uma com seu eixo e seu tipo (barra ou linha), como no gráfico 9
-   (toneladas × hectares).
+   variável como *Field Filter* (`[[ AND {{filtro}} ]]`), o Metabase gera
+   automaticamente listas de seleção no dashboard e ignora a cláusula quando o
+   filtro está vazio ou desconectado.
+7. **Controle de escopo de filtros por aba e por cartão** — permite que um
+   mesmo cartão de legenda ou KPI acompanhe todas as abas enquanto filtros
+   pontuais (como `Ano` ou `Fenômeno ENSO`) sejam ocultados nas abas de série
+   histórica contínua.
+8. **Gráfico combinado com eixo duplo** — séries com escalas muito diferentes
+   (toneladas × hectares, ou precipitação em `mm` × produção em toneladas)
+   podem ser sobrepostas no mesmo gráfico, cada uma com seu eixo e tipo visual.
 
 ---
 
-## 6. Fragilidades da Ferramenta
+## 7. Fragilidades da Ferramenta
 
 1. **Sincronização de schema não é automática nem confiável** — após adicionar
-   ou alterar tabelas no PostgreSQL, o Metabase pode apresentar as tabelas
-   "sem campos" até que uma sincronização manual seja forçada pelo
-   administrador, causando confusão e interrompendo o fluxo de trabalho.
-
+   ou alterar tabelas e views materializadas no PostgreSQL, o Metabase pode
+   exibir objetos "sem campos" até que uma sincronização manual seja forçada
+   pelo administrador.
 2. **Mensagens de erro pouco informativas** — erros de tipagem em joins (ex.:
    *"operador não existe: character varying = integer"*) são exibidos sem
-   indicar qual relacionamento está incorreto, dificultando o diagnóstico sem
-   recorrer aos logs do banco diretamente.
-
+   indicar qual relacionamento está incorreto, exigindo inspeção nos logs do
+   banco.
 3. **Funcionalidades avançadas de colaboração e auditoria reservadas à versão
    paga** — controle granular de permissões por linha, auditoria de acessos,
-   SSO e suporte oficial estão disponíveis apenas nas edições Pro/Enterprise,
-   criando limitações relevantes para uso em ambientes institucionais.
-
-4. **Desempenho em consultas com vários joins sobre tabelas grandes** — a base
-   utilizada contém aproximadamente 2,9 milhões de linhas; consultas que
-   encadeiam vários joins (produção → município → estado) e agregam a série
-   histórica inteira levaram cerca de 3 segundos para responder. O tempo é
-   aceitável nesta base, mas tende a aumentar em bases maiores e pode exigir
-   índices e ajustes no banco, fora do Metabase.
-
+   SSO e suporte oficial estão disponíveis apenas nas edições Pro/Enterprise.
+4. **Desempenho em consultas analíticas sobre tabelas volumosas sem pré-agregação**
+   — a base principal contém aproximadamente 2,9 milhões de linhas; consultas
+   com múltiplos joins e funções de janela apresentaram latência elevada,
+   exigindo a criação de **Views Materializadas** (`mv_historico_expansao_perda`
+   e `mv_matriz_cenarios_enso`) no PostgreSQL para garantir fluidez na
+   navegação.
 5. **Curva de aprendizado para modelagem relacional** — embora a interface
-   visual abstrai o SQL, o usuário ainda precisa compreender o conceito de
-   chaves estrangeiras e cadeias de relacionamento para configurar o modelo de
-   dados corretamente. Erros na definição dos relacionamentos no Metabase
-   resultam em resultados silenciosamente incorretos nos gráficos, sem aviso
-   explícito.
-
-6. **Configuração frágil das variáveis (Field Filters)** — se o campo vinculado
-   ou o alias (como `pa.ano` ou `e.nome`) não for preenchido exatamente como na
-   consulta, a execução falha com erros como *"missing required parameters"* ou
-   *"referência inválida para tabela"*, e o problema só aparece ao rodar.
-
+   visual abstraia o SQL, erros na definição de chaves estrangeiras ou
+   granularidades no modelo de dados resultam em agregações silenciosamente
+   multiplicadas sem aviso explícito.
+6. **Configuração frágil das variáveis (Field Filters) e apelidos (aliases)** —
+   como o Metabase injeta o nome completo da tabela no SQL gerado ao usar
+   *Field Filters* (ex.: `mv_historico_expansao_perda.cultura IN (...)`), o uso
+   de apelidos (`FROM tabela alias`) ou o mapeamento para a tabela errada
+   provoca falhas de execução no PostgreSQL.
 7. **Anos tratados como números** — colunas inteiras, como o ano, são exibidas
-   com separador de milhar (2.012) e tratadas como escala numérica, o que exige
-   converter para texto na consulta (`ano::text`) ou ajustar a formatação
-   coluna a coluna.
-
+   com separador de milhar (`2.012`) e tratadas como escala numérica por padrão,
+   exigindo ajuste de tipo semântico para *Categoria* ou formatação manual.
 8. **Eixo duplo não é automático** — ao combinar séries de escalas diferentes,
-   o Metabase coloca tudo no mesmo eixo, e a série de menor valor vira uma
-   linha achatada até que cada série seja configurada
-   manualmente (tipo de gráfico e posição do eixo).
+   o Metabase coloca tudo no mesmo eixo, fazendo a série de menor grandeza
+   ficar achatada junto ao zero até que cada série seja atribuída manualmente
+   ao eixo esquerdo ou direito.
