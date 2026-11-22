@@ -103,37 +103,133 @@ variáveis do IBGE/SIDRA, complementada pela tabela estadual `clima_historico`
 
 Para garantir tempo de resposta interativo nos gráficos analíticos e evitar
 distorções estatísticas ao cruzar granularidades diferentes (dados agrícolas
-municipais × dados climáticos estaduais), foram implementadas **duas Views
-Materializadas** no PostgreSQL:
+municipais × dados climáticos estaduais), foram criadas **duas Views
+Materializadas** no PostgreSQL antes da construção das consultas do dashboard:
 
-1. **`mv_historico_expansao_perda`**
-   - **Propósito:** consolidar anualmente, por Unidade da Federação (`uf`) e
-     `cultura` (além de uma linha totalizadora `'Todas (Total do Estado)'`),
-     as métricas físicas (`area_plantada_ha`, `area_colhida_ha`,
-     `producao_toneladas`), o evento climático vigente (`fenomeno_enso`) e os
-     indicadores derivados de risco:
-     - **Área Perdida (`area_perdida_ha`):** diferença entre a área plantada e
-       a área efetivamente colhida na safra.
-     - **Taxa de Investimento YoY (`taxa_investimento_yoy_pct`):** variação
-       percentual anual na abertura/retração de área plantada.
-     - **Aceleração da Perda (`aceleracao_perda_pp`):** variação em pontos
-       percentuais (`p.p.`) da taxa de frustração de safra em relação ao ano
-       anterior.
-   - **Ganho de desempenho:** elimina junções repetitivas sobre 2,9 milhões de
-     linhas nas consultas de evolução quinquenal, dispersão estadual e análise
-     de perdas.
+1. **`mv_historico_expansao_perda`** — consolida anualmente, por Unidade da
+   Federação (`uf`) e `cultura` (além da linha totalizadora `'Todas (Total do
+   Estado)'`), as métricas físicas (`area_plantada_ha`, `area_colhida_ha`,
+   `producao_toneladas`), o fenômeno ENSO vigente, a área perdida não colhida
+   (`area_perdida_ha`), a variação anual de área plantada
+   (`taxa_investimento_yoy_pct`) e a aceleração da taxa de perda em pontos
+   percentuais (`aceleracao_perda_pp`).
+2. **`mv_matriz_cenarios_enso`** — agrega toda a série histórica por tripla
+   `(uf, cultura, fenomeno_enso)`, calculando médias históricas de
+   precipitação, investimento anual, perda em hectares, percentual médio de
+   quebra, aceleração da perda e safra média esperada em toneladas.
 
-2. **`mv_matriz_cenarios_enso`**
-   - **Propósito:** agregar toda a série histórica por tripla `(uf, cultura,
-     fenomeno_enso)`, calculando médias históricas de precipitação
-     (`chuva_media_mm`), investimento anual (`taxa_mestre_investimento_pct`),
-     perda física (`perda_media_ha`), percentual médio de quebra
-     (`quebra_media_lavoura_pct`), aceleração média de perda e produção média
-     esperada (`safra_media_toneladas`), acompanhadas da contagem de safras
-     observadas (`anos_ocorrencia`).
-   - **Uso analítico:** alimenta diretamente a matriz preditiva da Aba 5,
-     permitindo simular o comportamento esperado de cada lavoura sob cenários
-     de *El Niño*, *La Niña* ou *Neutro*.
+### Script SQL de Criação das Views Materializadas
+
+Execute o script abaixo no PostgreSQL para criar e indexar as duas views
+materializadas necessárias para os gráficos **6, 7, 9 e 14 a 17**:
+
+```sql
+-- ============================================================================
+-- 1. VIEW MATERIALIZADA: HISTÓRICO DE EXPANSÃO, PRODUTIVIDADE E PERDAS
+-- ============================================================================
+DROP MATERIALIZED VIEW IF EXISTS mv_matriz_cenarios_enso;
+DROP MATERIALIZED VIEW IF EXISTS mv_historico_expansao_perda;
+
+CREATE MATERIALIZED VIEW mv_historico_expansao_perda AS
+WITH dados_base AS (
+    SELECT
+        pa.ano,
+        e.sigla AS uf,
+        p.nome AS cultura,
+        SUM(CASE WHEN pa.variavel_id IN (109, 2313) THEN pa.valor ELSE 0 END) AS area_plantada_ha,
+        SUM(CASE WHEN pa.variavel_id = 216 THEN pa.valor ELSE 0 END) AS area_colhida_ha,
+        SUM(CASE WHEN pa.variavel_id = 214 THEN pa.valor ELSE 0 END) AS producao_toneladas
+    FROM producao_agricola pa
+    INNER JOIN produto p ON pa.produto_id = p.id
+    INNER JOIN municipio m ON pa.municipio_id = m.id
+    INNER JOIN estado e ON m.estado_id = e.id
+    WHERE pa.variavel_id IN (109, 2313, 216, 214)
+    GROUP BY GROUPING SETS (
+        (pa.ano, e.sigla, p.nome),
+        (pa.ano, e.sigla)
+    )
+),
+consolidado AS (
+    SELECT
+        d.ano,
+        d.uf,
+        COALESCE(d.cultura, 'Todas (Total do Estado)') AS cultura,
+        c.fenomeno_enso,
+        d.area_plantada_ha,
+        d.area_colhida_ha,
+        GREATEST(d.area_plantada_ha - d.area_colhida_ha, 0) AS area_perdida_ha,
+        d.producao_toneladas
+    FROM dados_base d
+    LEFT JOIN estado e ON d.uf = e.sigla
+    LEFT JOIN clima_historico c ON c.estado_id = e.id AND c.ano = d.ano
+)
+SELECT
+    ano,
+    uf,
+    cultura,
+    fenomeno_enso,
+    area_plantada_ha,
+    area_colhida_ha,
+    area_perdida_ha,
+    producao_toneladas,
+    ROUND(
+        ((area_plantada_ha - LAG(area_plantada_ha) OVER (PARTITION BY uf, cultura ORDER BY ano)) /
+        NULLIF(LAG(area_plantada_ha) OVER (PARTITION BY uf, cultura ORDER BY ano), 0)) * 100,
+        2
+    ) AS taxa_investimento_yoy_pct,
+    ROUND(
+        ((area_perdida_ha / NULLIF(area_plantada_ha, 0)) * 100) -
+        ((LAG(area_perdida_ha) OVER (PARTITION BY uf, cultura ORDER BY ano) /
+          NULLIF(LAG(area_plantada_ha) OVER (PARTITION BY uf, cultura ORDER BY ano), 0)) * 100),
+        2
+    ) AS aceleracao_perda_pp
+FROM consolidado;
+
+CREATE INDEX idx_mv_hist_uf_cultura_ano
+    ON mv_historico_expansao_perda (uf, cultura, ano);
+
+-- ============================================================================
+-- 2. VIEW MATERIALIZADA: MATRIZ PREDITIVA DE CENÁRIOS CLIMÁTICOS (ENSO)
+-- ============================================================================
+CREATE MATERIALIZED VIEW mv_matriz_cenarios_enso AS
+WITH series_com_yoy AS (
+    SELECT
+        h.uf,
+        h.cultura,
+        h.fenomeno_enso,
+        h.ano,
+        c.precipitacao_anual_mm,
+        h.taxa_investimento_yoy_pct,
+        h.area_plantada_ha,
+        h.area_perdida_ha,
+        (h.area_perdida_ha / NULLIF(h.area_plantada_ha, 0)) * 100 AS quebra_lavoura_pct,
+        ((h.area_perdida_ha - LAG(h.area_perdida_ha) OVER (PARTITION BY h.uf, h.cultura ORDER BY h.ano)) /
+         NULLIF(LAG(h.area_perdida_ha) OVER (PARTITION BY h.uf, h.cultura ORDER BY h.ano), 0)) * 100 AS crescimento_perda_yoy_pct,
+        h.aceleracao_perda_pp,
+        h.producao_toneladas
+    FROM mv_historico_expansao_perda h
+    INNER JOIN estado e ON h.uf = e.sigla
+    LEFT JOIN clima_historico c ON c.estado_id = e.id AND c.ano = h.ano
+    WHERE h.fenomeno_enso IS NOT NULL
+)
+SELECT
+    uf,
+    cultura,
+    fenomeno_enso,
+    COUNT(DISTINCT ano) AS anos_ocorrencia,
+    ROUND(AVG(precipitacao_anual_mm)::numeric, 2) AS chuva_media_mm,
+    ROUND(AVG(taxa_investimento_yoy_pct)::numeric, 2) AS taxa_mestre_investimento_pct,
+    ROUND(AVG(area_perdida_ha)::numeric, 0) AS perda_media_ha,
+    ROUND(AVG(quebra_lavoura_pct)::numeric, 2) AS quebra_media_lavoura_pct,
+    ROUND(AVG(crescimento_perda_yoy_pct)::numeric, 2) AS crescimento_medio_perda_yoy_pct,
+    ROUND(AVG(aceleracao_perda_pp)::numeric, 2) AS aceleracao_media_perda_pp,
+    ROUND(AVG(producao_toneladas)::numeric, 0) AS safra_media_toneladas
+FROM series_com_yoy
+GROUP BY uf, cultura, fenomeno_enso;
+
+CREATE INDEX idx_mv_matriz_uf_cultura_enso
+    ON mv_matriz_cenarios_enso (uf, cultura, fenomeno_enso);
+```
 
 ---
 
@@ -193,7 +289,7 @@ cartão **Legenda** acompanha todas as abas exibindo o recorte ativo (ex.:
 | **4. Clima & Pluviometria** | 12 | Comparativo de Impacto (Médias por Fenômeno) | Colunas (Barras verticais) | `clima_historico` |
 | **4. Clima & Pluviometria** | 13 | Linha do Tempo (Chuva vs. Fenômeno) | Colunas agrupadas por evento | `clima_historico` |
 | **4. Clima & Pluviometria** | 14 | Chuva vs. Quebra de Safra | Combinado (2 linhas, 2 eixos) | `clima_historico` + `mv_historico_expansao_perda` |
-| **5. Risco & Cenários** | 15 | Evolução Física: Área Plantada vs. Área Perdida | Combinado (Barras + Linha, 2 eixos) | `mv_historico_expansao_perda` |
+| **5. Risco & Cenários** | 15 | Evolução Física: Área Plantada vs. Área Perdida | Colunas agrupadas (2 eixos) | `mv_historico_expansao_perda` |
 | **5. Risco & Cenários** | 16 | Expansão de Campo (%) vs. Aceleração da Perda (p.p.) | Linhas (2 eixos) | `mv_historico_expansao_perda` |
 | **5. Risco & Cenários** | 17 | Matriz Preditiva de Risco e Investimento (ENSO) | Tabela analítica com escala de cores | `mv_matriz_cenarios_enso` |
 
@@ -207,7 +303,10 @@ cartão **Legenda** acompanha todas as abas exibindo o recorte ativo (ex.:
 área cultivada total (`variavel_id IN (109, 2313)`, contemplando culturas
 temporárias e área destinada à colheita de culturas permanentes).  
 **Como:** gráfico de rosca (donut) com o total acumulado no centro e o
-percentual de cada lavoura na legenda.  
+percentual de cada lavoura na legenda.
+
+![Gráfico 1 — Participação das culturas no uso do solo](imagens/grafico1.png)
+
 **Por quê:** evidencia o grau de concentração territorial do agronegócio (como
 o domínio de Soja com 40,71%, Milho com 25,71% e Cana-de-açúcar com 12,65%) e
 permite ao gestor avaliar a necessidade de políticas de diversificação.
@@ -238,7 +337,10 @@ ORDER BY area_plantada_ha DESC;
 **O quê:** valor bruto da produção em reais (`R$`) por cultura (`variavel_id =
 215` convertida de Mil Reais para Reais), ordenado do maior para o menor.  
 **Como:** gráfico de colunas coloridas por cultura com rótulos de valores no
-topo.  
+topo.
+
+![Gráfico 2 — Comparativo de valor de produção](imagens/grafico2.png)
+
 **Por quê:** contrapõe o peso econômico ao peso físico das lavouras, mostrando
 quais cadeias geram maior retorno financeiro para o estado ou município.
 
@@ -271,7 +373,10 @@ ORDER BY valor_total_producao DESC;
 **O quê:** comparação anual entre a quantidade produzida em toneladas (eixo Y
 esquerdo) e a área plantada em hectares (eixo Y direito) de 1990 a 2025.  
 **Como:** gráfico combinado com barras azuis para toneladas e linha verde com
-marcadores para hectares.  
+marcadores para hectares.
+
+![Gráfico 3 — Relação histórica Volume produzido × Área plantada](imagens/grafico3.png)
+
 **Por quê:** permite distinguir se o crescimento da produção decorreu de
 expansão territorial ou de ganhos tecnológicos de produtividade por hectare.
 
@@ -299,7 +404,10 @@ ORDER BY producao_agricola.ano ASC;
 
 **O quê:** série temporal do volume físico colhido (em toneladas) entre 1990 e
 2025.  
-**Como:** gráfico de linhas com marcadores anuais.  
+**Como:** gráfico de linhas com marcadores anuais.
+
+![Gráfico 4 — Evolução de Produção](imagens/grafico4.png)
+
 **Por quê:** destaca a trajetória estrutural da safra e evidencia visualmente
 quedas abruptas causadas por choques climáticos (como as quebras de 2005, 2012
 e 2022 no Rio Grande do Sul).
@@ -327,7 +435,10 @@ ORDER BY producao_agricola.ano ASC;
 
 **O quê:** evolução histórica do valor da produção (`R$`) desagregada por
 cultura de 1990 a 2025.  
-**Como:** gráfico de linhas múltiplas coloridas por cultura.  
+**Como:** gráfico de linhas múltiplas coloridas por cultura.
+
+![Gráfico 5 — Evolução comparativa de culturas](imagens/grafico5.png)
+
 **Por quê:** demonstra a transformação econômica do campo ao longo de três
 décadas, evidenciando o salto financeiro da soja e do milho a partir de 2020.
 
@@ -358,7 +469,10 @@ quinquenais (`1990 - 1995` a `2021 a 2025`), com filtro adicional por
 macrorregião ou fronteira agrícola (`MATOPIBA`, `SEALBA`, `AMACRO`).  
 **Como:** tabela matricial com formatação condicional (gradiente de cor por
 intensidade de produção) lida diretamente da view materializada
-`mv_historico_expansao_perda`.  
+`mv_historico_expansao_perda`.
+
+![Gráfico 6 — Matriz de crescimento regional](imagens/grafico6.png)
+
 **Por quê:** permite comparar o avanço das novas fronteiras agrícolas
 (Centro-Oeste e MATOPIBA) frente às regiões produtoras tradicionais (Sul e
 Sudeste).
@@ -404,7 +518,10 @@ ORDER BY estado.nome ASC;
 **O quê:** rendimento médio ponderado (`kg/ha`) por Unidade da Federação,
 calculado pela razão entre produção total em quilogramas e área colhida em
 hectares.  
-**Como:** mapa coroplético do Brasil dividido por estados.  
+**Como:** mapa coroplético do Brasil dividido por estados.
+
+![Gráfico 7 — Mapa de Eficiência de Cultura](imagens/grafico7.png)
+
 **Por quê:** permite comparar instantaneamente a eficiência agronômica do Rio
 Grande do Sul frente aos demais estados produtores.
 
@@ -435,7 +552,10 @@ ORDER BY rendimento_medio_kg_ha DESC;
 **O quê:** os 10 municípios com maior volume produzido (em toneladas) de acordo
 com os filtros de cultura, estado, ano e município selecionados.  
 **Como:** gráfico de colunas com cores distintas por município e rótulos de
-volume no topo.  
+volume no topo.
+
+![Gráfico 8 — Ranking de Municípios Polos — Top 10](imagens/grafico8.png)
+
 **Por quê:** desce da escala estadual para a municipal, identificando os polos
 produtores que lideram a safra e servem de parâmetro comparativo para a gestão
 local.
@@ -468,7 +588,10 @@ LIMIT 10;
 
 **O quê:** cruzamento entre área plantada em hectares (eixo X) e rendimento
 médio em `kg/ha` (eixo Y) para cada estado produtor.  
-**Como:** gráfico de dispersão (scatter plot) com uma bolha por estado.  
+**Como:** gráfico de dispersão (scatter plot) com uma bolha por estado.
+
+![Gráfico 9 — Dispersão de Área vs. Eficiência](imagens/grafico9.png)
+
 **Por quê:** diferencia estados extensivos de estados intensivos em
 tecnologia, mostrando onde há oportunidade de elevar a produtividade sem
 depender apenas de abertura de novas áreas.
@@ -503,7 +626,10 @@ ORDER BY area_plantada DESC;
 produção nacional (`R$`).  
 **Como:** mapa de árvore (treemap) exibindo o valor absoluto e o percentual de
 cada UF (liderado por MT com 19,69%, SP com 13,32%, PR com 12,44%, MG com
-11,27% e RS com 9,92%).  
+11,27% e RS com 9,92%).
+
+![Gráfico 10 — Concentração de Riqueza Agrícola](imagens/grafico10.png)
+
 **Por quê:** ilustra a concentração econômica do agronegócio brasileiro e
 dimensiona o peso financeiro do Rio Grande do Sul na balança agrícola
 nacional.
@@ -535,7 +661,10 @@ ORDER BY valor_total_producao DESC;
 
 **O quê:** distribuição espacial da precipitação média anual (em milímetros)
 pelos estados brasileiros, filtrável por ano e estado.  
-**Como:** mapa coroplético do Brasil colorido por faixa pluviométrica (`mm`).  
+**Como:** mapa coroplético do Brasil colorido por faixa pluviométrica (`mm`).
+
+![Gráfico 11 — Mapa de Impacto Hídrico](imagens/grafico11.png)
+
 **Por quê:** permite inspecionar a distribuição geográfica das chuvas em anos
 específicos de crise hídrica ou excesso pluviométrico.
 
@@ -561,7 +690,10 @@ ORDER BY precipitacao_media_mm DESC;
 
 **O quê:** precipitação média histórica (`mm`) agrupada pelas três fases do
 ciclo ENSO (*El Niño*, *La Niña* e *Neutro*).  
-**Como:** gráfico de colunas verticais comparando os três regimes climáticos.  
+**Como:** gráfico de colunas verticais comparando os três regimes climáticos.
+
+![Gráfico 12 — Comparativo de Impacto (Médias por Fenômeno)](imagens/grafico12.png)
+
 **Por quê:** quando filtrado para um estado específico como o Rio Grande do
 Sul, evidencia numericamente o déficit hídrico característico de anos de
 *La Niña* frente ao aumento de chuvas em anos de *El Niño*.
@@ -587,7 +719,10 @@ ORDER BY precipitacao_media_mm DESC;
 
 **O quê:** série histórica anual da precipitação média (`mm`) colorida conforme
 o fenômeno ENSO predominante em cada ano (`Neutro`, `El Niño` e `La Niña`).  
-**Como:** gráfico de colunas cronológicas categorizadas por evento climático.  
+**Como:** gráfico de colunas cronológicas categorizadas por evento climático.
+
+![Gráfico 13 — Linha do Tempo (Chuva vs. Fenômeno)](imagens/grafico13.png)
+
 **Por quê:** evidencia os ciclos plurianuais de estiagem e excesso hídrico ao
 longo das décadas, permitindo correlacionar visualmente sequências de *La Niña*
 com quedas de safra.
@@ -615,7 +750,10 @@ ORDER BY clima_historico.ano ASC;
 **O quê:** sobreposição da precipitação média anual (`mm`, eixo esquerdo) com
 o volume total produzido em toneladas (eixo direito), calculados em CTEs
 separadas para evitar multiplicação cartesiana entre municípios e estados.  
-**Como:** gráfico combinado de duas linhas com eixos independentes.  
+**Como:** gráfico combinado de duas linhas com eixos independentes.
+
+![Gráfico 14 — Chuva vs. Quebra de Safra](imagens/grafico14.png)
+
 **Por quê:** comprova visualmente a sensibilidade hídrica das lavouras,
 mostrando como vales na curva de precipitação antecedem ou coincidem com
 quebras bruscas na colheita.
@@ -664,7 +802,10 @@ ORDER BY clima_anual.ano ASC;
 
 **O quê:** comparação anual entre a área total plantada (eixo Y esquerdo) e a
 área perdida não colhida (eixo Y direito) em hectares desde 1991.  
-**Como:** gráfico de colunas agrupadas com dois eixos Y independentes.  
+**Como:** gráfico de colunas agrupadas com dois eixos Y independentes.
+
+![Gráfico 15 — Evolução Física da Lavoura: Área Plantada vs. Área Perdida (ha)](imagens/grafico15.png)
+
 **Por quê:** mensura diretamente o prejuízo físico em hectares sofrido pelos
 produtores em anos de adversidade climática, subsidiando pedidos de seguro
 agrícola e renegociação de crédito rural.
@@ -694,7 +835,10 @@ ORDER BY ano ASC;
 os agregados anuais) entre a taxa anual de expansão da área plantada (`%`) e a
 aceleração da taxa de perda (`p.p.`).  
 **Como:** gráfico de linhas com eixos independentes (expansão à direita e
-aceleração da perda à esquerda).  
+aceleração da perda à esquerda).
+
+![Gráfico 16 — Expansão de Campo (%) vs. Aceleração da Perda (p.p.)](imagens/grafico16.png)
+
 **Por quê:** avalia o risco financeiro da expansão agrícola: identifica anos em
 que o produtor ampliou fortemente o investimento em área plantada e enfrentou
 salto abrupto na frustração de colheita.
@@ -748,7 +892,10 @@ hectares, percentual médio de quebra, aceleração da perda e safra esperada em
 toneladas.  
 **Como:** tabela analítica interativa com formatação condicional em escala de
 cores nas colunas de risco, alimentada pela view materializada
-`mv_matriz_cenarios_enso`.  
+`mv_matriz_cenarios_enso`.
+
+![Gráfico 17 — Matriz Preditiva de Risco e Investimento por Cenário Climático (ENSO)](imagens/grafico17.png)
+
 **Por quê:** serve como ferramenta de apoio à decisão prospectiva: diante da
 previsão meteorológica para a próxima safra (ex.: confirmação de *La Niña*), o
 gestor identifica imediatamente quais culturas do seu estado possuem maior
